@@ -5,14 +5,17 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import { authenticateToken } from './middleware/auth.js';
 
+import documentRoutes from './routes/documentRoutes.js'; // Import our new routers
+
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Bind Feature API Module Routers
+// Main App API Routes Layout Linkages
 app.use('/api/auth', authRoutes);
+app.use('/api/documents', documentRoutes); // Mount file system router mappings
 
 
 // Base Server Validation Route checking DB connectivity

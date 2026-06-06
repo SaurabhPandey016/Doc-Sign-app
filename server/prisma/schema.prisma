@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum DocStatus {
+  PENDING
+  SIGNED
+  REJECTED
+}
+
+model User {
+  id         String      @id @default(uuid())
+  email      String      @unique
+  password   String
+  name       String
+  documents  Document[]  @relation("OwnerDocs")
+  signatures Signature[] @relation("UserSignatures")
+  audits     AuditLog[]
+  createdAt  DateTime    @default(now())
+}
+
+model Document {
+  id           String      @id @default(uuid())
+  title        String
+  fileUrl      String      
+  status       DocStatus   @default(PENDING)
+  ownerId      String
+  owner        User        @relation("OwnerDocs", fields: [ownerId], references: [id])
+  signatures   Signature[]
+  auditLogs    AuditLog[]
+  rejectReason String?
+  createdAt    DateTime    @default(now())
+}
+
+model Signature {
+  id            String   @id @default(uuid())
+  documentId    String
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  signerEmail   String
+  signerId      String?  
+  signer        User?    @relation("UserSignatures", fields: [signerId], references: [id])
+  x             Float    
+  y             Float    
+  pageNumber    Int      @default(1)
+  signatureData String?  
+  isSigned      Boolean  @default(false)
+  signedAt      DateTime?
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   
+  ipAddress  String
+  createdAt  DateTime @default(now())
+}

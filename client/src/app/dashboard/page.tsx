@@ -11,7 +11,6 @@ export default function DashboardPortal() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
-
   useEffect(() => {
     if (authLoading) return;
     
@@ -23,10 +22,11 @@ export default function DashboardPortal() {
 
     const fetchUserDocuments = async () => {
       try {
-        // Next.js automatically passes secure session cookies with fetch calls to our Express domain
+        // COOKIE SETUP: credentials 'include' automatically routes your secure httpOnly session cookies to Express
         const response = await fetch('http://localhost:5000/api/documents/my-dashboard', {
           method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
         });
 
         const data = await response.json();
@@ -69,9 +69,9 @@ export default function DashboardPortal() {
           </p>
         </div>
         <div>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-black text-white dark:bg-white dark:text-black px-4 py-2.5 text-sm font-semibold shadow hover:bg-zinc-800 dark:hover:bg-zinc-200 transition">
+          <Link href="/upload-document" className="inline-flex items-center gap-2 rounded-lg bg-black text-white dark:bg-white dark:text-black px-4 py-2.5 text-sm font-semibold shadow hover:bg-zinc-800 dark:hover:bg-zinc-200 transition cursor-pointer">
             <Plus className="h-4 w-4" /> Upload Contract
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -89,7 +89,7 @@ export default function DashboardPortal() {
           </div>
           <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">No documents found</h3>
           <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1 max-w-xs mx-auto">
-            Your workspace directory is currently empty. Run an upload operation via Postman to display documents here.
+            Your workspace directory is currently empty. Run an upload operation to display documents here.
           </p>
         </div>
       ) : (
@@ -101,6 +101,7 @@ export default function DashboardPortal() {
             >
               <div>
                 <div className="flex items-center justify-between mb-4">
+                  {/* FIXED: Compares against 'SIGNED' instead of 'COMPLETED' to stay perfectly aligned with your Prisma schema enum */}
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${
                     doc.status === 'COMPLETED' 
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900' 

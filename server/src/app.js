@@ -10,7 +10,11 @@ import documentRoutes from './routes/documentRoutes.js'; // Import our new route
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000', // Allows your Next.js frontend port
+  credentials: true                // Permits secure cross-domain HTTP-Only cookies
+}));
+app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Add this line to parse form fields safely
 app.use(express.json());
 
 // Main App API Routes Layout Linkages

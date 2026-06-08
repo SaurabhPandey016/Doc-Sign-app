@@ -1,12 +1,10 @@
 'use client';
-import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { FileText, LogOut, User } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
-
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-zinc-200 bg-white/80 backdrop-blur-md dark:bg-black/80 dark:border-zinc-800">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -21,6 +19,7 @@ export default function Navbar() {
               DocuSign<span className="text-zinc-500 font-medium">.io</span>
             </span>
           </Link>
+
 
           {/* Action Account Details */}
           {user && (

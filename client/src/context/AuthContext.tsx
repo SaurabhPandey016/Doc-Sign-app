@@ -4,8 +4,9 @@ import { UserSession } from '@/types';
 
 interface AuthContextType {
   user: UserSession | null;
-  login: (token: string, user: UserSession) => Promise<void>;
+  login: (user: UserSession) => Promise<void>;
   logout: () => Promise<void>;
+  refreshSession: () => Promise<void>;
   loading: boolean;
 }
 
@@ -15,31 +16,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const refreshSession = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('http://localhost:5000/api/auth/verify-session', {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (!res.ok) {
+        setUser(null);
+        return;
+      }
+
+      const data = await res.json();
+      setUser((data.sessionUser as UserSession) ?? null);
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
 
     const verifySession = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch('http://localhost:5000/api/auth/verify-session', {
-          method: 'GET',
-          credentials: 'include'
-        });
-
-        if (!res.ok) {
-          if (!cancelled) setUser(null);
-          return;
-        }
-
-        const data = await res.json();
-        if (!cancelled) {
-          setUser((data.sessionUser as UserSession) ?? null);
-        }
-      } catch {
-        if (!cancelled) setUser(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      if (cancelled) return;
+      await refreshSession();
+      if (cancelled) return;
     };
 
     verifySession();
@@ -48,18 +53,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-
-  const login = async (token: string, newUser: UserSession) => {
+  const login = async (newUser: UserSession) => {
     try {
-      const res = await fetch('/api/auth/cookie', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, user: newUser }),
-      });
-
-      if (res.ok) {
-        setUser(newUser);
-      }
+      await refreshSession();
+      setUser(newUser);
     } catch (err) {
       console.error('Failed to commit secure authentication pipeline:', err);
     }
@@ -67,21 +64,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/auth/logout', {
+      await fetch('http://localhost:5000/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });
-
-      if (res.ok) {
-        setUser(null);
-      }
     } catch (err) {
       console.error('Failed to cleanly drop active authentication session:', err);
+    } finally {
+      setUser(null);
+      setLoading(false);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, refreshSession, loading }}>
       {children}
     </AuthContext.Provider>
   );

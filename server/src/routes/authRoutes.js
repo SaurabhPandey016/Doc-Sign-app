@@ -1,5 +1,5 @@
 import express from 'express';
-import { handleRegister, handleLogin } from '../controllers/authController.js';
+import { handleRegister, handleLogin, handleLogout } from '../controllers/authController.js';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
@@ -9,6 +9,7 @@ const router = express.Router();
 
 router.post('/register', handleRegister);
 router.post('/login', handleLogin);
+router.post('/logout', handleLogout);
 
 // Configuration for Nodemailer email delivery transporter engine
 const transporter = nodemailer.createTransport({

@@ -1,22 +1,24 @@
 'use client';
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { DocumentSchema } from '@/types';
-import { FileText, Download, Edit3, Loader2, AlertCircle, Plus } from 'lucide-react';
+import { FileText, Download, Edit3, Loader2, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DashboardPortal() {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [documents, setDocuments] = useState<DocumentSchema[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
     
     if (!user) {
-      setErr("Authorization verification failed. Session context is currently unauthenticated.");
-      setLoading(false);
+      router.replace('/login');
       return;
     }
 
@@ -44,7 +46,31 @@ export default function DashboardPortal() {
     };
 
     fetchUserDocuments();
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
+
+  const handleDelete = async (documentId: string) => {
+    if (!window.confirm('Remove this document from your workspace?')) return;
+
+    setDeletingId(documentId);
+    try {
+      const response = await fetch(`http://localhost:5000/api/documents/${documentId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setErr(data.error || 'Unable to delete this document.');
+        return;
+      }
+
+      setDocuments((prev) => prev.filter((document) => document.id !== documentId));
+    } catch {
+      setErr('Unable to remove this document right now.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (authLoading || loading) {
     return (
@@ -103,8 +129,8 @@ export default function DashboardPortal() {
                 <div className="flex items-center justify-between mb-4">
                   {/* FIXED: Compares against 'SIGNED' instead of 'COMPLETED' to stay perfectly aligned with your Prisma schema enum */}
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${
-                    doc.status === 'COMPLETED' 
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900' 
+                    doc.status === 'SIGNED'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900'
                       : 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
                   }`}>
                     {doc.status}
@@ -128,6 +154,14 @@ export default function DashboardPortal() {
                 >
                   <Download className="h-3.5 w-3.5" /> Download
                 </a>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(doc.id)}
+                  disabled={deletingId === doc.id}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
                 <Link 
                   href={`/workspace/${doc.id}`} 
                   className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg text-xs font-semibold hover:bg-zinc-800 dark:hover:bg-zinc-200 transition shadow-sm"

@@ -26,10 +26,11 @@ export const handleLogin = async (req, res) => {
 
     // Inject token safely into an HttpOnly cookie channel
     res.cookie('token', token, {
-      httpOnly: true, // Blocks browser-side JavaScript access vectors (XSS Guard)
-      secure: process.env.NODE_ENV === 'production', // Enforces SSL transmission context in production
-      sameSite: 'lax', // Guards against CSRF transaction attacks
-      maxAge: 24 * 60 * 60 * 1000 // 24-hour cookie life window
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 24 * 60 * 60 * 1000
     });
 
     // Return message and the user metadata profile back to client view frame
@@ -44,6 +45,21 @@ export const handleLogin = async (req, res) => {
 
 // Clear session credentials securely
 export const handleLogout = async (req, res) => {
-  res.clearCookie('token');
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/'
+  });
+
+  // Extra: ensure the cookie is removed even if browser requires an explicit maxAge
+  res.cookie('token', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0
+  });
+
   res.status(200).json({ message: "Session wiped cleanly." });
 };

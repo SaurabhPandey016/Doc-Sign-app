@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, AlertCircle, Mail, Lock } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -28,7 +30,7 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Cookie is HttpOnly and is set by the Express backend.
+        await login(data.user);
         router.push('/dashboard');
       } else {
         setErr(data.error || 'Identity parameters invalid or missing profiles.');

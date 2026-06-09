@@ -80,6 +80,12 @@ export default function UploadDocumentPortal() {
     }
   };
 
+  React.useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/login');
+    }
+  }, [authLoading, user, router]);
+
   if (authLoading) {
     return (
       <div className="flex min-h-[calc(100vh-4rem)] w-full flex-col items-center justify-center gap-3">

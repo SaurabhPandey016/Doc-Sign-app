@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { uploadMiddleware } from '../middleware/upload.js';
 import { supabaseClient } from '../config/supabase.js';
 import prisma from '../config/db.js';
+import { PDFDocument } from 'pdf-lib';
 
 const router = express.Router();
 
@@ -88,11 +89,56 @@ router.get('/my-dashboard', authenticateToken, async (req, res) => {
   }
 });
 
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const document = await prisma.document.findFirst({
+      where: { id: req.params.id, ownerId: req.user.id }
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Requested document asset not found.' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.signature.deleteMany({ where: { documentId: document.id } });
+      await tx.auditLog.deleteMany({ where: { documentId: document.id } });
+      await tx.document.delete({ where: { id: document.id } });
+    });
+
+    try {
+      const url = new URL(document.fileUrl);
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      const storageIndex = pathParts.indexOf('documents');
+      const storagePath = storageIndex >= 0 ? pathParts.slice(storageIndex + 1).join('/') : null;
+
+      if (storagePath) {
+        const { error: removeError } = await supabaseClient.storage
+          .from('documents')
+          .remove([decodeURIComponent(storagePath)]);
+
+        if (removeError) {
+          console.error('Warning: storage cleanup failed during deletion:', removeError.message);
+        }
+      }
+    } catch (storageError) {
+      console.error('Warning: storage cleanup skipped during deletion:', storageError);
+    }
+
+    res.status(200).json({ success: true, message: 'Document removed from your workspace.' });
+  } catch (dbError) {
+    console.error('Delete document failure:', dbError);
+    res.status(500).json({ error: 'Failed to remove document from your workspace.' });
+  }
+});
+
 // Fetch details for a specific single document inside the workspace layout
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const document = await prisma.document.findUnique({
-      where: { id: req.params.id }
+    const document = await prisma.document.findFirst({
+      where: {
+        id: req.params.id,
+        ownerId: req.user.id
+      }
     });
 
     if (!document) {
@@ -113,7 +159,68 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
   const { signatureData, coordinates } = req.body;
 
   try {
-    // 1. Map parameters to match your real schema columns perfectly
+    const document = await prisma.document.findFirst({
+      where: { id, ownerId: req.user.id }
+    });
+    if (!document) {
+      return res.status(404).json({ error: "Requested document asset not found." });
+    }
+
+    const pdfResponse = await fetch(document.fileUrl);
+    if (!pdfResponse.ok) {
+      throw new Error('Unable to download the PDF for signing.');
+    }
+
+    const pdfBytes = Buffer.from(await pdfResponse.arrayBuffer());
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const page = pdfDoc.getPage(0);
+
+    const imageBytes = Buffer.from(signatureData.split(',')[1], 'base64');
+    const signatureImage = await pdfDoc.embedPng(imageBytes);
+
+    const canvasWidth = Number(coordinates?.canvas_width || 150);
+    const canvasHeight = Number(coordinates?.canvas_height || 60);
+    const x = Number(coordinates?.x_position || 0);
+    const y = Number(coordinates?.y_position || 0);
+
+    const pageWidth = page.getWidth();
+    const pageHeight = page.getHeight();
+    const scaleX = (pageWidth / canvasWidth) * 0.95;
+    const scaleY = (pageHeight / canvasHeight) * 0.95;
+    const width = signatureImage.width * scaleX;
+    const height = signatureImage.height * scaleY;
+    const drawX = Math.max(0, x * (pageWidth / canvasWidth));
+    const drawY = Math.max(0, pageHeight - y * (pageHeight / canvasHeight) - height);
+
+    page.drawImage(signatureImage, {
+      x: drawX,
+      y: drawY,
+      width,
+      height,
+    });
+
+    const signedPdfBytes = await pdfDoc.save();
+    const signedFileName = `${req.user.id}-${Date.now()}-signed.pdf`;
+    const { error: uploadError } = await supabaseClient.storage
+      .from('documents')
+      .upload(signedFileName, signedPdfBytes, {
+        contentType: 'application/pdf',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(`Unable to store the signed PDF: ${uploadError.message}`);
+    }
+
+    const { data: publicUrlData } = supabaseClient.storage
+      .from('documents')
+      .getPublicUrl(signedFileName);
+
+    await prisma.document.update({
+      where: { id },
+      data: { fileUrl: publicUrlData.publicUrl, status: 'SIGNED' }
+    });
+
     const signature = await prisma.signature.create({
       data: {
         documentId: id,
@@ -130,14 +237,7 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
       }
     });
 
-    // 2. Automatically update the document status. 
-    // NOTE: Your schema uses 'SIGNED' instead of 'COMPLETED' inside the DocStatus enum!
-    await prisma.document.update({
-      where: { id },
-      data: { status: 'SIGNED' } 
-    });
-
-    // 3. Create a clean entry inside your AuditLog table to record the signature transaction history
+    // Create a clean entry inside your AuditLog table to record the signature transaction history
     await prisma.auditLog.create({
       data: {
         documentId: id,

@@ -31,6 +31,8 @@ export default function WorkspacePage() {
   // Interactive Signature Modality States
   const [isPadOpen, setIsPadOpen] = useState(false);
   const [capturedSignature, setCapturedSignature] = useState<string | null>(null);
+  const [documentFileUrl, setDocumentFileUrl] = useState<string | null>(null);
+  const [penColor, setPenColor] = useState('#111827');
   
   // Real-time Coordinate Placement Tracking
   const [sigPosition, setSigPosition] = useState({ x: 50, y: 50 });
@@ -40,8 +42,7 @@ export default function WorkspacePage() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      setErr('Session authentication missing. Please use Postman cookie setups.');
-      setLoading(false);
+      router.replace('/login');
       return;
     }
 
@@ -49,11 +50,14 @@ export default function WorkspacePage() {
       try {
         const response = await fetch(`http://localhost:5000/api/documents/${id}`, {
           method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
         });
         const data = await response.json();
         if (response.ok) {
           setDocumentTitle(data.document.title);
+          // Store pdf url for preview
+          setDocumentFileUrl(data.document.fileUrl);
         } else {
           setErr(data.error || 'Failed to retrieve requested asset.');
         }
@@ -85,6 +89,7 @@ export default function WorkspacePage() {
       const response = await fetch(`http://localhost:5000/api/documents/${id}/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           signatureData: capturedSignature,
           coordinates: {
@@ -138,16 +143,21 @@ export default function WorkspacePage() {
           </span>
         </div>
         
-        {/* Document Rendering Frame Window */}
+          {/* Document Rendering Frame Window */}
         <div className="relative w-full max-w-3xl h-[70vh] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden flex items-center justify-center">
-          <div className="absolute inset-0 p-12 text-zinc-300 dark:text-zinc-800 select-none pointer-events-none font-serif text-sm leading-relaxed overflow-hidden">
-            <h2 className="text-zinc-400 dark:text-zinc-700 text-lg font-bold mb-6 font-sans">MUTUAL NON-DISCLOSURE AGREEMENT</h2>
-            <p className="mb-4">1. Business Purpose. The parties desire to evaluate a potential business partnership related to secure cloud document management architectures, Next.js application parameters, and Supabase database relational clusters.</p>
-            <p className="mb-4">2. Confidential Information. Intellectual property including compiled JWT verification models and routing protocols shall be treated with maximum operational discretion.</p>
-            <div className="mt-20 border-t border-dashed border-zinc-200 dark:border-zinc-800 pt-4 w-48">
-              <p className="text-[10px] font-sans font-bold uppercase tracking-wider text-zinc-400">Authorized Legal Signatory</p>
+          {documentFileUrl ? (
+            // Preview the uploaded PDF (Supabase public url)
+            <iframe
+              src={documentFileUrl}
+              title="Document Preview"
+              className="absolute inset-0 w-full h-full border-0"
+            />
+          ) : (
+            <div className="absolute inset-0 p-12 text-zinc-300 dark:text-zinc-800 select-none pointer-events-none font-serif text-sm leading-relaxed overflow-hidden">
+              <h2 className="text-zinc-400 dark:text-zinc-700 text-lg font-bold mb-6 font-sans">Loading document...</h2>
+              <p className="mb-4">Preparing your uploaded PDF preview for signature placement.</p>
             </div>
-          </div>
+          )}
 
           {/* Draggable and Resizable Signature Asset Overlay */}
           {capturedSignature && (
@@ -160,13 +170,13 @@ export default function WorkspacePage() {
                 setSigPosition(pos);
               }}
               bounds="parent" minWidth={100} minHeight={40} maxWidth={300} maxHeight={120}
-              className="z-30 group border-2 border-dashed border-zinc-900 dark:border-white bg-white/40 backdrop-blur-[1px] cursor-move rounded-md p-1 flex items-center justify-center"
+              className="z-30 group cursor-move rounded-2xl border border-zinc-300 bg-white/95 shadow-[0_18px_40px_rgba(15,23,42,0.18)] backdrop-blur-md p-1 flex items-center justify-center dark:border-zinc-700 dark:bg-zinc-950/95"
             >
               <div className="absolute -top-6 left-0 bg-black dark:bg-white text-white dark:text-black text-[9px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none select-none">
                 <Move className="h-2.5 w-2.5" /> Drag & Size Signature
               </div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={capturedSignature} alt="Signature Stamp" className="w-full h-full object-contain pointer-events-none select-none dark:invert" />
+              <img src={capturedSignature} alt="Signature Stamp" className="w-full h-full object-contain rounded-xl pointer-events-none select-none" />
             </Rnd>
           )}
         </div>
@@ -252,22 +262,37 @@ export default function WorkspacePage() {
               <div className="w-full h-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-inner cursor-crosshair">
                 <SignatureCanvas
                   ref={sigPadRef}
-                  penColor="black"
+                  penColor={penColor}
                   canvasProps={{ className: 'w-full h-full min-h-[174px] bg-white dark:bg-zinc-900' }}
                 />
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-zinc-100/50 dark:bg-zinc-900/50 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end gap-3">
+            <div className="px-6 py-4 bg-zinc-100/50 dark:bg-zinc-900/50 border-t border-zinc-100 dark:border-zinc-800 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                {['#111827', '#2563eb', '#16a34a', '#f59e0b', '#dc2626'].map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setPenColor(color)}
+                    className={`h-6 w-6 rounded-full border-2 transition ${penColor === color ? 'border-black dark:border-white scale-110' : 'border-zinc-300 dark:border-zinc-700'}`}
+                    style={{ backgroundColor: color }}
+                    aria-label={`Use ${color} ink`}
+                  />
+                ))}
+                <span className="text-[11px] font-semibold text-zinc-500">Choose signature color</span>
+              </div>
+              <div className="flex items-center justify-end gap-3">
               <button onClick={() => setIsPadOpen(false)} className="px-4 py-2 text-xs font-semibold text-zinc-500 hover:text-black dark:hover:text-white transition">
                 Cancel
               </button>
               <button onClick={() => sigPadRef.current?.clear()} className="px-4 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition">
                 Clear Ink
               </button>
-              <button onClick={handleSaveSignatureInk} className="px-4 py-2 bg-black text-white dark:bg-white dark:text-black rounded-lg text-xs font-bold transition shadow">
-                Insert Signature
-              </button>
+                <button onClick={handleSaveSignatureInk} className="px-4 py-2 bg-black text-white dark:bg-white dark:text-black rounded-lg text-xs font-bold transition shadow">
+                  Insert Signature
+                </button>
+              </div>
             </div>
           </div>
         </div>

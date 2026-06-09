@@ -41,7 +41,7 @@ export default function Navbar() {
             ) : (
               <>
                 <Link href="/" className="rounded-full px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-white hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-white">Home</Link>
-                <Link href="/login" className="rounded-full px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-white hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-white">Sign In</Link>
+               {/* <Link href="/login" className="rounded-full px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-white hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-white">Sign In</Link> */}
               </>
             )}
           </div>

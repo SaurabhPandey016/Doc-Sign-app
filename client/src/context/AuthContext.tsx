@@ -16,13 +16,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Rehydrate basic user profiles safely across local browser reloads
-    const savedUser = localStorage.getItem('app_user_profile');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setLoading(false);
+    let cancelled = false;
+
+    const verifySession = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch('http://localhost:5000/api/auth/verify-session', {
+          method: 'GET',
+          credentials: 'include'
+        });
+
+        if (!res.ok) {
+          if (!cancelled) setUser(null);
+          return;
+        }
+
+        const data = await res.json();
+        if (!cancelled) {
+          setUser((data.sessionUser as UserSession) ?? null);
+        }
+      } catch {
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    verifySession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
 
   const login = async (token: string, newUser: UserSession) => {
     try {
@@ -34,7 +59,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (res.ok) {
         setUser(newUser);
-        localStorage.setItem('app_user_profile', JSON.stringify(newUser));
       }
     } catch (err) {
       console.error('Failed to commit secure authentication pipeline:', err);
@@ -43,10 +67,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      const res = await fetch('http://localhost:5000/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+
       if (res.ok) {
         setUser(null);
-        localStorage.removeItem('app_user_profile');
       }
     } catch (err) {
       console.error('Failed to cleanly drop active authentication session:', err);

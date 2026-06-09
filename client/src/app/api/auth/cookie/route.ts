@@ -12,7 +12,7 @@ export async function POST(request: Request) {
 
     // Bake the HTTP-Only cookie parameter matrix securely into the client browser
     response.cookies.set({
-      name: 'auth_token',
+      name: 'token',
       value: token,
       httpOnly: true, // Complete isolation from client-side JS scripts (XSS defense)
       secure: process.env.NODE_ENV === 'production', // Enforces SSL in production

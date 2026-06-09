@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 
 export async function POST() {
   const response = NextResponse.json({ success: true });
-  
+
   // Instantly overwrite and invalidate the active auth cookie
   response.cookies.set({
-    name: 'auth_token',
+    name: 'token',
     value: '',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

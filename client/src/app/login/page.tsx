@@ -28,8 +28,8 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('user', JSON.stringify(data.user));
-        router.push('/dashboard'); // Routes directly onto your brand new dashboard page
+        // Cookie is HttpOnly and is set by the Express backend.
+        router.push('/dashboard');
       } else {
         setErr(data.error || 'Identity parameters invalid or missing profiles.');
       }

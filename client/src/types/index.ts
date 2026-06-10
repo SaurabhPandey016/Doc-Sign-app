@@ -9,6 +9,7 @@ export interface DocumentSchema {
   title: string;
   fileUrl: string;
   status: 'PENDING' | 'SIGNED' | 'REJECTED';
+  rejectReason?: string | null;
   createdAt: string;
   ownerId: string;
 }

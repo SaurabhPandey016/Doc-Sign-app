@@ -20,6 +20,7 @@ export default function WorkspacePage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const sigPadRef = useRef<SignatureCanvas | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
   // Primary Workspace Component State Tracking
   const [documentTitle, setDocumentTitle] = useState('Loading contract context...');
@@ -86,6 +87,10 @@ export default function WorkspacePage() {
     setSubmitting(true);
     setErr('');
     try {
+      const previewBounds = previewRef.current?.getBoundingClientRect();
+      const previewWidth = Math.max(1, Math.round(previewBounds?.width || 0));
+      const previewHeight = Math.max(1, Math.round(previewBounds?.height || 0));
+
       const response = await fetch(`http://localhost:5000/api/documents/${id}/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -95,8 +100,10 @@ export default function WorkspacePage() {
           coordinates: {
             x_position: Math.round(sigPosition.x),
             y_position: Math.round(sigPosition.y),
-            canvas_width: Math.round(sigSize.width),
-            canvas_height: Math.round(sigSize.height)
+            overlay_width: Math.round(sigSize.width),
+            overlay_height: Math.round(sigSize.height),
+            preview_width: previewWidth,
+            preview_height: previewHeight
           }
         })
       });
@@ -144,7 +151,10 @@ export default function WorkspacePage() {
         </div>
         
           {/* Document Rendering Frame Window */}
-        <div className="relative w-full max-w-3xl h-[70vh] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden flex items-center justify-center">
+        <div
+          ref={previewRef}
+          className="relative w-full max-w-3xl h-[70vh] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden flex items-center justify-center"
+        >
           {documentFileUrl ? (
             // Preview the uploaded PDF (Supabase public url)
             <iframe

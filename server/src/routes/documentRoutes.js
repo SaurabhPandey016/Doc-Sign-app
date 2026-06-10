@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import { authenticateToken } from '../middleware/auth.js';
 import { uploadMiddleware } from '../middleware/upload.js';
 import { supabaseClient } from '../config/supabase.js';
@@ -6,6 +7,34 @@ import prisma from '../config/db.js';
 import { PDFDocument } from 'pdf-lib';
 
 const router = express.Router();
+const SHARE_SECRET = process.env.SHARE_SECRET || 'dev-signature-share-secret';
+
+const createShareToken = (documentId) => {
+  const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+  const payload = `${documentId}:${expiresAt}`;
+  const signature = crypto.createHmac('sha256', SHARE_SECRET).update(payload).digest('hex');
+  const token = `${signature}.${documentId}.${expiresAt}`;
+  return { token, expiresAt, shareUrl: `http://localhost:3000/sign/${token}` };
+};
+
+const verifyShareToken = (token) => {
+  const [signature, documentId, expiresAt] = token.split('.');
+  if (!signature || !documentId || !expiresAt) return null;
+  const payload = `${documentId}:${expiresAt}`;
+  const expected = crypto.createHmac('sha256', SHARE_SECRET).update(payload).digest('hex');
+  if (expected !== signature || Number(expiresAt) < Date.now()) return null;
+  return { documentId, expiresAt: Number(expiresAt) };
+};
+
+const logAudit = async (documentId, userId, action, ipAddress) => {
+  try {
+    await prisma.auditLog.create({
+      data: { documentId, userId, action, ipAddress: ipAddress || '127.0.0.1' }
+    });
+  } catch (error) {
+    console.error('Audit log failure:', error);
+  }
+};
 
 router.post('/upload', authenticateToken, (req, res) => {
   // Process incoming file stream
@@ -132,6 +161,96 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // Fetch details for a specific single document inside the workspace layout
+router.get('/public/:token', async (req, res) => {
+  try {
+    const verified = verifyShareToken(req.params.token);
+    if (!verified) return res.status(401).json({ error: 'This signature link has expired or is invalid.' });
+
+    const document = await prisma.document.findUnique({ where: { id: verified.documentId } });
+    if (!document) return res.status(404).json({ error: 'Requested document asset not found.' });
+
+    res.status(200).json({ success: true, document, shareExpiresAt: verified.expiresAt });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to open the signature link.' });
+  }
+});
+
+router.post('/public/:token/decision', async (req, res) => {
+  try {
+    const verified = verifyShareToken(req.params.token);
+    if (!verified) return res.status(401).json({ error: 'This signature link has expired or is invalid.' });
+
+    const { action, reason = '' } = req.body;
+    if (!['SIGNED', 'REJECTED'].includes(action)) return res.status(400).json({ error: 'Action must be SIGNED or REJECTED.' });
+
+    const document = await prisma.document.findUnique({ where: { id: verified.documentId } });
+    if (!document) return res.status(404).json({ error: 'Requested document asset not found.' });
+
+    await prisma.document.update({
+      where: { id: document.id },
+      data: {
+        status: action,
+        rejectReason: action === 'REJECTED' ? reason || 'Signer rejected the document.' : null
+      }
+    });
+
+    await logAudit(document.id, document.ownerId, `External signer marked document as ${action}${action === 'REJECTED' ? `: ${reason}` : ''}`, req.ip || '127.0.0.1');
+
+    res.status(200).json({ success: true, status: action, message: action === 'SIGNED' ? 'Document accepted for signing.' : 'Document rejected successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to update the signature decision.' });
+  }
+});
+
+router.post('/:id/share', authenticateToken, async (req, res) => {
+  try {
+    const document = await prisma.document.findFirst({ where: { id: req.params.id, ownerId: req.user.id } });
+    if (!document) return res.status(404).json({ error: 'Requested document asset not found.' });
+
+    const share = createShareToken(document.id);
+    const signerEmail = req.body.email || req.user.email;
+
+    try {
+      const { default: nodemailer } = await import('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'sandbox.smtp.mailtrap.io',
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: false,
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        tls: { rejectUnauthorized: false }
+      });
+      await transporter.sendMail({
+        from: '"DocuSign.io" <noreply@docusign.io>',
+        to: signerEmail,
+        subject: 'Your secure signature link is ready',
+        html: `<p>Open this secure link to review and sign the document:</p><p><a href="${share.shareUrl}">${share.shareUrl}</a></p>`
+      });
+    } catch (emailError) {
+      console.error('Email delivery skipped:', emailError);
+    }
+
+    res.status(200).json({ success: true, shareUrl: share.shareUrl, expiresAt: share.expiresAt, emailSent: Boolean(req.body.email || req.user.email) });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to generate the secure signing link.' });
+  }
+});
+
+router.get('/:id/audit', authenticateToken, async (req, res) => {
+  try {
+    const document = await prisma.document.findFirst({ where: { id: req.params.id, ownerId: req.user.id } });
+    if (!document) return res.status(404).json({ error: 'Requested document asset not found.' });
+
+    const auditEntries = await prisma.auditLog.findMany({
+      where: { documentId: document.id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.status(200).json({ success: true, document, auditEntries });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to load audit history.' });
+  }
+});
+
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const document = await prisma.document.findFirst({
@@ -178,19 +297,22 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
     const imageBytes = Buffer.from(signatureData.split(',')[1], 'base64');
     const signatureImage = await pdfDoc.embedPng(imageBytes);
 
-    const canvasWidth = Number(coordinates?.canvas_width || 150);
-    const canvasHeight = Number(coordinates?.canvas_height || 60);
+    const previewWidth = Number(coordinates?.preview_width || coordinates?.canvas_width || 0);
+    const previewHeight = Number(coordinates?.preview_height || coordinates?.canvas_height || 0);
+    const overlayWidth = Number(coordinates?.overlay_width || coordinates?.canvas_width || 150);
+    const overlayHeight = Number(coordinates?.overlay_height || coordinates?.canvas_height || 60);
     const x = Number(coordinates?.x_position || 0);
     const y = Number(coordinates?.y_position || 0);
 
     const pageWidth = page.getWidth();
     const pageHeight = page.getHeight();
-    const scaleX = (pageWidth / canvasWidth) * 0.95;
-    const scaleY = (pageHeight / canvasHeight) * 0.95;
-    const width = signatureImage.width * scaleX;
-    const height = signatureImage.height * scaleY;
-    const drawX = Math.max(0, x * (pageWidth / canvasWidth));
-    const drawY = Math.max(0, pageHeight - y * (pageHeight / canvasHeight) - height);
+    const scaleX = previewWidth > 0 ? pageWidth / previewWidth : 1;
+    const scaleY = previewHeight > 0 ? pageHeight / previewHeight : 1;
+
+    const width = Math.min(overlayWidth * scaleX, pageWidth * 0.45);
+    const height = Math.min(overlayHeight * scaleY, pageHeight * 0.18);
+    const drawX = Math.max(0, x * scaleX);
+    const drawY = Math.max(0, pageHeight - (y + overlayHeight) * scaleY);
 
     page.drawImage(signatureImage, {
       x: drawX,
@@ -220,6 +342,8 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
       where: { id },
       data: { fileUrl: publicUrlData.publicUrl, status: 'SIGNED' }
     });
+
+    await logAudit(id, req.user.id, `Document signed by ${req.user.email}`, req.ip || '127.0.0.1');
 
     const signature = await prisma.signature.create({
       data: {

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { DocumentSchema } from '@/types';
-import { FileText, Download, Edit3, Loader2, AlertCircle, Plus, Trash2, ShieldCheck, Clock3, BadgeAlert, Send } from 'lucide-react';
+import { FileText, Download, Loader2, AlertCircle, Plus, Trash2, ShieldCheck, Send } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DashboardPortal() {
@@ -218,13 +218,12 @@ export default function DashboardPortal() {
                 >
                   <Download className="h-3.5 w-3.5" /> Download
                 </a>
-                <button
-                  type="button"
-                  onClick={() => handleShare(doc.id)}
+                <Link
+                  href={`/send/${doc.id}`}
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
                 >
-                  <Send className="h-3.5 w-3.5" /> Share
-                </button>
+                  <Send className="h-3.5 w-3.5" /> Send
+                </Link>
                 <Link
                   href={`/audit/${doc.id}`}
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
@@ -239,12 +238,6 @@ export default function DashboardPortal() {
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Delete
                 </button>
-                <Link 
-                  href={`/workspace/${doc.id}`} 
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg text-xs font-semibold hover:bg-zinc-800 dark:hover:bg-zinc-200 transition shadow-sm"
-                >
-                  <Edit3 className="h-3.5 w-3.5" /> Sign Pad
-                </Link>
               </div>
             </div>
           ))}

@@ -77,7 +77,7 @@ export default function LoginPage() {
           <div>
             <div className="flex justify-between items-center mb-1.5">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">Vault Secure Key</label>
-              <Link href="/auth/forgot-password" style={{ fontSize: '11px' }} className="text-zinc-400 font-medium hover:text-black dark:hover:text-white transition underline">
+              <Link href="/forgot-password" style={{ fontSize: '11px' }} className="text-zinc-400 font-medium hover:text-black dark:hover:text-white transition underline">
                 Recover Vault Link?
               </Link>
             </div>

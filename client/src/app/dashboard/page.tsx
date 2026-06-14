@@ -209,24 +209,24 @@ export default function DashboardPortal() {
                 <p className="text-[11px] text-zinc-400 truncate tracking-tight">{doc.id}</p>
               </div>
               
-              <div className="mt-6 grid grid-cols-2 gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800/60">
+              <div className="mt-6 grid grid-cols-1 gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800/60 sm:grid-cols-2 xl:grid-cols-3">
                 <a 
                   href={doc.fileUrl} 
                   target="_blank" 
                   rel="noreferrer" 
-                  className="col-span-2 inline-flex items-center justify-center gap-1.5 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition shadow-sm"
+                  className="col-span-1 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 sm:col-span-2 xl:col-span-4"
                 >
                   <Download className="h-3.5 w-3.5" /> Download
                 </a>
                 <Link
                   href={`/send/${doc.id}`}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-[11px] font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 xl:min-h-[2.85rem]"
                 >
                   <Send className="h-3.5 w-3.5" /> Send
                 </Link>
                 <Link
                   href={`/audit/${doc.id}`}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-[11px] font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900 xl:min-h-[2.85rem]"
                 >
                   <ShieldCheck className="h-3.5 w-3.5" /> Audit
                 </Link>
@@ -234,7 +234,7 @@ export default function DashboardPortal() {
                   type="button"
                   onClick={() => handleDelete(doc.id)}
                   disabled={deletingId === doc.id}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-3 py-2.5 text-[11px] font-semibold text-red-600 shadow-sm transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/60 dark:bg-gradient-to-r dark:from-red-950/40 dark:to-rose-950/30 dark:text-red-300 dark:hover:bg-red-950/50 xl:col-span-2"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Delete
                 </button>

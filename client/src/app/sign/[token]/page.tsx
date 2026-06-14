@@ -20,14 +20,40 @@ export default function PublicSignPage() {
   const [capturedSignature, setCapturedSignature] = useState<string | null>(null);
   const [penColor, setPenColor] = useState('#111827');
   const [submitting, setSubmitting] = useState(false);
-  const [sigPosition, setSigPosition] = useState({ x: 70, y: 70 });
+  const [sigPosition, setSigPosition] = useState({ x: 56, y: 56 });
   const [sigSize, setSigSize] = useState({ width: 180, height: 70 });
+  const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
+
+  const getPreviewBounds = () => {
+    const rect = previewRef.current?.getBoundingClientRect();
+    return {
+      width: Math.max(1, rect?.width || previewSize.width || previewRef.current?.clientWidth || 0),
+      height: Math.max(1, rect?.height || previewSize.height || previewRef.current?.clientHeight || 0),
+    };
+  };
 
   const clampPosition = (nextX: number, nextY: number, width = sigSize.width, height = sigSize.height) => {
-    const maxX = Math.max(0, (previewRef.current?.clientWidth || 0) - width);
-    const maxY = Math.max(0, (previewRef.current?.clientHeight || 0) - height);
+    const { width: previewWidth, height: previewHeight } = getPreviewBounds();
+    const maxX = Math.max(0, previewWidth - width);
+    const maxY = Math.max(0, previewHeight - height);
     return { x: Math.min(Math.max(nextX, 0), maxX), y: Math.min(Math.max(nextY, 0), maxY) };
   };
+
+  useEffect(() => {
+    const node = previewRef.current;
+    if (!node) return;
+
+    const updatePreviewSize = () => {
+      const bounds = node.getBoundingClientRect();
+      setPreviewSize({ width: Math.max(1, bounds.width), height: Math.max(1, bounds.height) });
+    };
+
+    updatePreviewSize();
+    const observer = new ResizeObserver(updatePreviewSize);
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -117,7 +143,7 @@ export default function PublicSignPage() {
             {document && <><p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Document</p><h2 className="mt-1 text-lg font-bold text-black dark:text-white">{document.title}</h2><a href={document.fileUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-xl bg-black px-3 py-2 text-xs font-semibold text-white dark:bg-white dark:text-black">Open PDF</a></>}
             <div ref={previewRef} className="mt-5 relative h-105 w-full rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 overflow-hidden">
               {document?.fileUrl ? <iframe src={document.fileUrl} title="Document preview" className="absolute inset-0 h-full w-full border-0" /> : <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500">Loading preview…</div>}
-              {capturedSignature && <Rnd size={{ width: sigSize.width, height: sigSize.height }} position={{ x: sigPosition.x, y: sigPosition.y }} onDragStop={(e, d) => setSigPosition(clampPosition(d.x, d.y))} onResizeStop={(e, dir, ref, delta, pos) => { const nextSize = { width: Math.max(100, Math.min(280, parseInt(ref.style.width, 10) || sigSize.width)), height: Math.max(40, Math.min(120, parseInt(ref.style.height, 10) || sigSize.height)) }; setSigSize(nextSize); setSigPosition(clampPosition(pos.x, pos.y, nextSize.width, nextSize.height)); }} bounds="parent" minWidth={100} minHeight={40} maxWidth={280} maxHeight={120} dragHandleClassName="cursor-move" enableResizing={{ top:false, right:true, bottom:true, left:true, topRight:false, bottomRight:true, bottomLeft:true, topLeft:false }} className="z-20 rounded-2xl border border-zinc-300 bg-white/95 p-1 shadow-[0_18px_40px_rgba(15,23,42,0.18)] backdrop-blur-md dark:border-zinc-700 dark:bg-zinc-950/95"><div className="absolute -top-6 left-0 flex items-center gap-1 rounded bg-black px-1.5 py-0.5 text-[9px] font-bold uppercase text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-white dark:text-black pointer-events-none"> <Move className="h-2.5 w-2.5" /> Drag & size</div><img src={capturedSignature} alt="Signature placement" className="h-full w-full rounded-xl object-contain" /></Rnd>}
+              {capturedSignature && <Rnd size={{ width: sigSize.width, height: sigSize.height }} position={{ x: sigPosition.x, y: sigPosition.y }} onDragStop={(event, data) => setSigPosition(clampPosition(data.x, data.y))} onResizeStop={(event, direction, ref, delta, position) => { const parsedWidth = Number.parseInt(ref.style.width || '', 10) || sigSize.width; const parsedHeight = Number.parseInt(ref.style.height || '', 10) || sigSize.height; const nextSize = { width: Math.min(280, Math.max(100, parsedWidth)), height: Math.min(120, Math.max(40, parsedHeight)) }; setSigSize(nextSize); setSigPosition(clampPosition(position.x, position.y, nextSize.width, nextSize.height)); }} bounds="parent" minWidth={100} minHeight={40} maxWidth={280} maxHeight={120} enableResizing={{ top:false, right:true, bottom:true, left:true, topRight:false, bottomRight:true, bottomLeft:true, topLeft:false }} style={{ touchAction: 'none', zIndex: 30, cursor: 'move' }} className="rounded-2xl border border-zinc-300 bg-white/95 p-1 shadow-[0_18px_40px_rgba(15,23,42,0.18)] backdrop-blur-md dark:border-zinc-700 dark:bg-zinc-950/95"><div className="absolute -top-6 left-0 flex items-center gap-1 rounded bg-black px-1.5 py-0.5 text-[9px] font-bold uppercase text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-white dark:text-black pointer-events-none"><Move className="h-2.5 w-2.5" /> Drag & size</div><img src={capturedSignature} alt="Signature placement" className="h-full w-full rounded-xl object-contain" /></Rnd>}
             </div>
             <button onClick={() => setIsPadOpen(true)} className="mt-4 w-full rounded-xl bg-black px-4 py-2.5 text-xs font-semibold text-white dark:bg-white dark:text-black">Draw or update signature</button>
           </section>

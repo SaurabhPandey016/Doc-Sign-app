@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
+import { apiUrl } from '@/config/api';
 import { 
   UploadCloud, 
   ArrowLeft, 
@@ -57,7 +58,7 @@ export default function UploadDocumentPortal() {
     uploadPacket.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:5000/api/documents/upload', {
+      const response = await fetch(apiUrl('/api/documents/upload'), {
         method: 'POST',
         body: uploadPacket,
         credentials: 'include' // COOKIE SETUP: Automatically appends validation state

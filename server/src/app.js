@@ -10,16 +10,12 @@ import documentRoutes from './routes/documentRoutes.js'; // Import our new route
 dotenv.config();
 
 const app = express();
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, same-origin)
-    if (!origin) return callback(null, true);
 
-    // Explicit allowlist for your Next.js dev ports
-    const allowed = origin === 'http://localhost:3000' || origin === 'http://localhost:3001';
-    return callback(null, allowed);
-  },
-  credentials: true
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Add this line to parse form fields safely
 app.use(express.json());

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { apiUrl } from '@/config/api';
 import { Rnd } from 'react-rnd';
 import SignatureCanvas from 'react-signature-canvas';
 import { AlertCircle, CheckCircle2, Loader2, Move } from 'lucide-react';
@@ -58,7 +59,7 @@ export default function PublicSignPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/documents/public/${token}`);
+        const response = await fetch(apiUrl(`/api/documents/public/${token}`));
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'This link is invalid.');
         setDocument(data.document);
@@ -94,8 +95,8 @@ export default function PublicSignPage() {
       const previewHeight = Math.max(1, Math.round(previewBounds?.height || 0));
 
       const endpoint = action === 'SIGNED'
-        ? `http://localhost:5000/api/documents/public/${token}/sign`
-        : `http://localhost:5000/api/documents/public/${token}/decision`;
+        ? apiUrl(`/api/documents/public/${token}/sign`)
+        : apiUrl(`/api/documents/public/${token}/decision`);
 
       const body = action === 'SIGNED'
         ? {

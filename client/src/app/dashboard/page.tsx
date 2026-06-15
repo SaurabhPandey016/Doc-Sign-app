@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { DocumentSchema } from '@/types';
 import { FileText, Download, Loader2, AlertCircle, Plus, Trash2, ShieldCheck, Send } from 'lucide-react';
 import Link from 'next/link';
+import { apiUrl } from '@/config/api';
 
 export default function DashboardPortal() {
   const router = useRouter();
@@ -27,7 +28,7 @@ export default function DashboardPortal() {
     const fetchUserDocuments = async () => {
       try {
         // COOKIE SETUP: credentials 'include' automatically routes your secure httpOnly session cookies to Express
-        const response = await fetch('http://localhost:5000/api/documents/my-dashboard', {
+        const response = await fetch(apiUrl('/api/documents/my-dashboard'), {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include'
@@ -54,7 +55,7 @@ export default function DashboardPortal() {
     const targetDocument = documents.find((item) => item.id === documentId);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/documents/${documentId}/share`, {
+      const response = await fetch(apiUrl(`/api/documents/${documentId}/share`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -93,7 +94,7 @@ export default function DashboardPortal() {
 
     setDeletingId(documentId);
     try {
-      const response = await fetch(`http://localhost:5000/api/documents/${documentId}`, {
+      const response = await fetch(apiUrl(`/api/documents/${documentId}`), {
         method: 'DELETE',
         credentials: 'include'
       });

@@ -1,6 +1,7 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserSession } from '@/types';
+import { apiUrl } from '@/config/api';
 
 interface AuthContextType {
   user: UserSession | null;
@@ -19,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshSession = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:5000/api/auth/verify-session', {
+      const res = await fetch(apiUrl('/api/auth/verify-session'), {
         method: 'GET',
         credentials: 'include'
       });
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch('http://localhost:5000/api/auth/logout', {
+      await fetch(apiUrl('/api/auth/logout'), {
         method: 'POST',
         credentials: 'include'
       });

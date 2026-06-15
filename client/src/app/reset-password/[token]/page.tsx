@@ -2,6 +2,7 @@
 import React, { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, AlertCircle, Lock, CheckCircle } from 'lucide-react';
+import { apiUrl } from '@/config/api';
 
 interface ResetProps {
   params: Promise<{ token: string }>;
@@ -29,7 +30,7 @@ export default function ResetPasswordPage({ params }: ResetProps) {
     setErr('');
 
     try {
-      const response = await fetch(`http://localhost:5000/api/auth/reset-password/${token}`, {
+      const response = await fetch(apiUrl(`/api/auth/reset-password/${token}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
+import { apiUrl } from '@/config/api';
 
 export default function AuditPage() {
   const { id } = useParams();
@@ -25,7 +26,7 @@ export default function AuditPage() {
 
     const fetchAudit = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/documents/${id}/audit`, {
+        const response = await fetch(apiUrl(`/api/documents/${id}/audit`), {
           credentials: 'include'
         });
         const raw = await response.text();

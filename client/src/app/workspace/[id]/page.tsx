@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { apiUrl } from '@/config/api';
 import { Rnd } from 'react-rnd';
 import SignatureCanvas from 'react-signature-canvas';
 import { 
@@ -49,7 +50,7 @@ export default function WorkspacePage() {
 
     const fetchWorkspaceDocument = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/documents/${id}`, {
+        const response = await fetch(apiUrl(`/api/documents/${id}`), {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include'
@@ -91,7 +92,7 @@ export default function WorkspacePage() {
       const previewWidth = Math.max(1, Math.round(previewBounds?.width || 0));
       const previewHeight = Math.max(1, Math.round(previewBounds?.height || 0));
 
-      const response = await fetch(`http://localhost:5000/api/documents/${id}/sign`, {
+      const response = await fetch(apiUrl(`/api/documents/${id}/sign`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

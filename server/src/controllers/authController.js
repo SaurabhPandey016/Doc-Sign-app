@@ -25,10 +25,12 @@ export const handleLogin = async (req, res) => {
     const { token, user } = await authService.loginUser(email, password);
 
     // Inject token safely into an HttpOnly cookie channel
+    const isProduction = process.env.NODE_ENV === 'production';
+
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
       path: '/',
       maxAge: 24 * 60 * 60 * 1000
     });
@@ -45,18 +47,20 @@ export const handleLogin = async (req, res) => {
 
 // Clear session credentials securely
 export const handleLogout = async (req, res) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+
   res.clearCookie('token', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
     path: '/'
   });
 
   // Extra: ensure the cookie is removed even if browser requires an explicit maxAge
   res.cookie('token', '', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
     path: '/',
     maxAge: 0
   });

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Mail, ShieldCheck } from 'lucide-react';
+import { apiUrl } from '@/config/api';
 
 export default function SendDocumentPage() {
   const { id } = useParams();
@@ -26,7 +27,7 @@ export default function SendDocumentPage() {
 
     const fetchDocument = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/documents/${id}`, {
+        const response = await fetch(apiUrl(`/api/documents/${id}`), {
           credentials: 'include'
         });
         const data = await response.json();
@@ -49,7 +50,7 @@ export default function SendDocumentPage() {
     setSending(true);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/documents/${id}/share`, {
+      const response = await fetch(apiUrl(`/api/documents/${id}/share`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

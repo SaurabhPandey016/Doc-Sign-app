@@ -8,9 +8,7 @@ import { authenticateToken } from './middleware/auth.js';
 import documentRoutes from './routes/documentRoutes.js'; // Import our new routers
 
 dotenv.config();
-
 const app = express();
-
 app.use(cors({
   origin: true,
   credentials: true,
@@ -47,11 +45,20 @@ app.get('/api/health-check', async (req, res) => {
 
 // Protected Verification Endpoint - Verifies auth token validation rules cleanly
 app.get('/api/auth/verify-session', authenticateToken, (req, res) => {
-  res.status(200).json({
-    authenticated: true,
-    message: "Your JWT transmission packet was securely decoded and verified!",
-    sessionUser: req.user
-  });
+
+  try {
+    res.status(200).json({
+      authenticated: true,
+      message: "Your JWT transmission packet was securely decoded and verified!",
+      sessionUser: req.user
+    });
+  } catch (error) {
+    res.status(500).json({
+      authenticated: false,
+      message: "An error occurred while verifying the session.",
+      error: error.message
+    });
+  }
 });
 
 const PORT = process.env.PORT || 5000;

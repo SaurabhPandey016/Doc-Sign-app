@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Mail, ShieldCheck } from 'lucide-react';
-import { apiUrl } from '@/config/api';
+import { fetchWithTimeout } from '@/config/api';
 
 export default function SendDocumentPage() {
   const { id } = useParams();
@@ -27,9 +27,9 @@ export default function SendDocumentPage() {
 
     const fetchDocument = async () => {
       try {
-        const response = await fetch(apiUrl(`/api/documents/${id}`), {
+        const response = await fetchWithTimeout(`/api/documents/${id}`, {
           credentials: 'include'
-        });
+        }, 20000);
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Unable to load this document.');
         setDocumentTitle(data.document.title);
@@ -50,17 +50,21 @@ export default function SendDocumentPage() {
     setSending(true);
 
     try {
-      const response = await fetch(apiUrl(`/api/documents/${id}/share`), {
+      const response = await fetchWithTimeout(`/api/documents/${id}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ email: email.trim() || user?.email })
-      });
+      }, 30000);
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to send the signing link.');
 
-      setSuccess(`Secure signing invitation sent to ${email.trim() || user?.email}. Link expires in 7 days.`);
+      if (data.fallback) {
+        setSuccess(`Secure link generated. Email delivery could not be completed, but you can copy this link: ${data.shareUrl}`);
+      } else {
+        setSuccess(`Secure signing invitation sent to ${email.trim() || user?.email}. Link expires in 7 days.`);
+      }
     } catch (error) {
       setErr(error instanceof Error ? error.message : 'Unable to send the signing link.');
     } finally {

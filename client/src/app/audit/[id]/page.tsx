@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
-import { apiUrl } from '@/config/api';
+import { fetchWithTimeout } from '@/config/api';
 
 export default function AuditPage() {
   const { id } = useParams();
@@ -26,9 +26,9 @@ export default function AuditPage() {
 
     const fetchAudit = async () => {
       try {
-        const response = await fetch(apiUrl(`/api/documents/${id}/audit`), {
+        const response = await fetchWithTimeout(`/api/documents/${id}/audit`, {
           credentials: 'include'
-        });
+        }, 20000);
         const raw = await response.text();
         let data: any = {};
         try { data = raw ? JSON.parse(raw) : {}; } catch { data = { error: raw || 'Server returned an unexpected response.' }; }

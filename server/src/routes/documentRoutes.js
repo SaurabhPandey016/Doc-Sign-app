@@ -42,12 +42,24 @@ const createTransporter = () => nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'sandbox.smtp.mailtrap.io',
   port: Number(process.env.SMTP_PORT || 2525),
   secure: false,
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 15000,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
   tls: { rejectUnauthorized: false },
 });
+
+const sendMailWithTimeout = async (transporter, mailOptions, timeoutMs = 20000) => {
+  return Promise.race([
+    transporter.sendMail(mailOptions),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Email delivery timed out. Please try again.')), timeoutMs);
+    })
+  ]);
+};
 
 const applySignatureToPdf = async ({ documentUrl, signatureData, coordinates }) => {
   const pdfResponse = await fetch(documentUrl);
@@ -313,35 +325,45 @@ router.post('/:id/share', authenticateToken, async (req, res) => {
     const signerEmail = req.body.email || req.user.email;
 
     const transporter = createTransporter();
-    await transporter.verify();
+    let emailSent = false;
+    let deliveryResponse = 'Email delivery not attempted.';
 
-    const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || '"DocuSign.io" <noreply@docusign.io>',
-      to: signerEmail,
-      subject: 'Your secure signing invitation is ready',
-      html: `
-        <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;background:#0f172a;color:#e5eefb;padding:24px;border-radius:18px;">
-          <h2 style="margin:0 0 8px;font-size:24px;line-height:1.2;color:#fff;">Secure signature request</h2>
-          <p style="margin:0 0 14px;color:#cbd5e1;font-size:14px;">You have been invited to review and sign a document securely. This invitation expires in 7 days from the time it was sent.</p>
-          <div style="background:#111827;border:1px solid #1f2937;border-radius:16px;padding:18px;">
-            <p style="margin:0 0 8px;color:#bfdbfe;font-size:13px;text-transform:uppercase;letter-spacing:1.4px;">Open your secure link</p>
-            <a href="${share.shareUrl}" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#8b5cf6);color:#fff;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:700;font-size:14px;">Review & sign document</a>
-            <p style="margin-top:12px;color:#cbd5e1;font-size:12px;word-break:break-all;">${share.shareUrl}</p>
-          </div>
-          <p style="margin-top:14px;color:#94a3b8;font-size:12px;">If this request was not expected, you can safely ignore this email.</p>
-        </div>`
-    });
+    try {
+      const info = await sendMailWithTimeout(transporter, {
+        from: process.env.SMTP_FROM || '"DocuSign.io" <noreply@docusign.io>',
+        to: signerEmail,
+        subject: 'Your secure signing invitation is ready',
+        html: `
+          <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;background:#0f172a;color:#e5eefb;padding:24px;border-radius:18px;">
+            <h2 style="margin:0 0 8px;font-size:24px;line-height:1.2;color:#fff;">Secure signature request</h2>
+            <p style="margin:0 0 14px;color:#cbd5e1;font-size:14px;">You have been invited to review and sign a document securely. This invitation expires in 7 days from the time it was sent.</p>
+            <div style="background:#111827;border:1px solid #1f2937;border-radius:16px;padding:18px;">
+              <p style="margin:0 0 8px;color:#bfdbfe;font-size:13px;text-transform:uppercase;letter-spacing:1.4px;">Open your secure link</p>
+              <a href="${share.shareUrl}" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#8b5cf6);color:#fff;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:700;font-size:14px;">Review & sign document</a>
+              <p style="margin-top:12px;color:#cbd5e1;font-size:12px;word-break:break-all;">${share.shareUrl}</p>
+            </div>
+            <p style="margin-top:14px;color:#94a3b8;font-size:12px;">If this request was not expected, you can safely ignore this email.</p>
+          </div>`
+      });
+
+      emailSent = true;
+      deliveryResponse = info.response || 'Queued through SMTP.';
+    } catch (smtpError) {
+      console.warn('SMTP delivery unavailable, using fallback share link:', smtpError.message || smtpError);
+      deliveryResponse = 'Email delivery unavailable. The secure link was still generated for manual sharing.';
+    }
 
     res.status(200).json({
       success: true,
       shareUrl: share.shareUrl,
       expiresAt: share.expiresAt,
-      emailSent: true,
-      deliveryResponse: info.response || 'Queued through Mailtrap SMTP.'
+      emailSent,
+      deliveryResponse,
+      fallback: !emailSent
     });
   } catch (error) {
-    console.error('Email delivery failed:', error);
-    res.status(500).json({ error: 'Unable to generate the secure signing link. SMTP delivery failed.' });
+    console.error('Share link generation failed:', error);
+    res.status(500).json({ error: 'Unable to generate the secure signing link.' });
   }
 });
 

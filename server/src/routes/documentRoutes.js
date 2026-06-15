@@ -9,13 +9,14 @@ import { PDFDocument } from 'pdf-lib';
 
 const router = express.Router();
 const SHARE_SECRET = process.env.SHARE_SECRET || 'dev-signature-share-secret';
+const FRONTEND_URL = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '');
 
 const createShareToken = (documentId) => {
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
   const payload = `${documentId}:${expiresAt}`;
   const signature = crypto.createHmac('sha256', SHARE_SECRET).update(payload).digest('hex');
   const token = `${signature}.${documentId}.${expiresAt}`;
-  return { token, expiresAt, shareUrl: `http://localhost:3000/sign/${token}` };
+  return { token, expiresAt, shareUrl: `${FRONTEND_URL}/sign/${token}` };
 };
 
 const verifyShareToken = (token) => {

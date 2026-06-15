@@ -52,7 +52,8 @@ router.post('/forgot-password', async (req, res) => {
       }
     });
 
-    const verificationLink = `http://localhost:3000/reset-password/${resetToken}`;
+    const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000';
+    const verificationLink = `${frontendUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
 
     // Dispatch system transmission packet using Nodemailer
     await transporter.sendMail({

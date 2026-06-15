@@ -37,8 +37,9 @@ export const handleLogin = async (req, res) => {
 
     // Return message and the user metadata profile back to client view frame
     res.status(200).json({ 
-      message: "Authentication successful.", 
-      user 
+      message: "Authentication successful.",
+      token,
+      user
     });
   } catch (error) {
     res.status(401).json({ error: error.message });

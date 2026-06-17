@@ -10,6 +10,7 @@ export const apiUrl = (path: string) => {
   return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 };
 
+
 export const fetchWithTimeout = async (path: string, options: RequestInit = {}, timeoutMs = 20000) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

@@ -14,6 +14,7 @@ export const handleRegister = async (req, res) => {
   }
 };
 
+
 export const handleLogin = async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {

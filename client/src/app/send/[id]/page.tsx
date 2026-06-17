@@ -58,12 +58,13 @@ export default function SendDocumentPage() {
       }, 30000);
 
       const data = await response.json();
+      console.log('Share response data:', data);
       if (!response.ok) throw new Error(data.error || 'Unable to send the signing link.');
 
-      if (data.fallback) {
-        setSuccess(`Secure link generated. Email delivery could not be completed, but you can copy this link: ${data.shareUrl}`);
+      if (data.emailSent) {
+        setSuccess(`Secure signing invitation sent to ${email.trim() || user?.email}. Link expires in 7 days. If Mailtrap.io is slow you can also use this link to test the app: ${data.shareUrl}`);
       } else {
-        setSuccess(`Secure signing invitation sent to ${email.trim() || user?.email}. Link expires in 7 days.`);
+        throw new Error('Email service failed. Please verify SMTP configuration on your backend.');
       }
     } catch (error) {
       setErr(error instanceof Error ? error.message : 'Unable to send the signing link.');

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { handleRegister, handleLogin, handleLogout } from '../controllers/authController.js';
 import crypto from 'crypto';
@@ -29,6 +30,8 @@ const transporter = nodemailer.createTransport({
 
 // ROUTE 1: Dispatch secure token email link to target user mailbox
 router.post('/forgot-password', async (req, res) => {
+
+  console.error("inside the forgot password section");
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: "Email address parameter required." });
 
@@ -52,16 +55,15 @@ router.post('/forgot-password', async (req, res) => {
       }
     });
 
-    const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000';
-    const verificationLink = `${frontendUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
+    const verificationLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
     // Dispatch system transmission packet using Nodemailer
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: '"Signature Vault Support" <noreply@company.com>',
       to: user.email,
       subject: "Immutable Reset Vector - Password Change Request",
       html: `
-        <div style="font-family: sans-serif; max-width: 500px; padding: 20px; border: 1px solid #e4e4e7; border-radius: 12px;">
+        <div style="font-family: sans-serif; max-width: 500px; padding: 20px; border: 1px solid #e4e7; border-radius: 12px;">
           <h2 style="font-weight: 900; tracking-tight: -0.05em; margin-bottom: 4px;">Reset Account Cryptography</h2>
           <p style="font-size: 13px; color: #71717a;">A request has been compiled to replace the entry keys for your Signature Hub vault.</p>
           <div style="margin: 24px 0;">
@@ -71,6 +73,7 @@ router.post('/forgot-password', async (req, res) => {
         </div>
       `
     });
+    console.log('Password reset email dispatched:', info && info.response ? info.response : 'sent');
 
     res.status(200).json({ message: "If an account matches that email, a reset transmission link has been dispatched." });
   } catch (error) {
@@ -85,6 +88,8 @@ router.post('/forgot-password', async (req, res) => {
 
 // ROUTE 2: Verify token signature bounds and overwrite password hashing entries
 router.post('/reset-password/:token', async (req, res) => {
+
+  console.error("inside the reset password section");
   const { token } = req.params;
   const { password } = req.body;
 

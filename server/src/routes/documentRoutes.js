@@ -1,6 +1,5 @@
 import express from 'express';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
 import { authenticateToken } from '../middleware/auth.js';
 import { uploadMiddleware } from '../middleware/upload.js';
 import { supabaseClient } from '../config/supabase.js';
@@ -9,14 +8,13 @@ import { PDFDocument } from 'pdf-lib';
 
 const router = express.Router();
 const SHARE_SECRET = process.env.SHARE_SECRET || 'dev-signature-share-secret';
-const FRONTEND_URL = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '');
 
 const createShareToken = (documentId) => {
-  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
   const payload = `${documentId}:${expiresAt}`;
   const signature = crypto.createHmac('sha256', SHARE_SECRET).update(payload).digest('hex');
   const token = `${signature}.${documentId}.${expiresAt}`;
-  return { token, expiresAt, shareUrl: `${FRONTEND_URL}/sign/${token}` };
+  return { token, expiresAt, shareUrl: `${process.env.FRONTEND_URL}/sign/${token}` };
 };
 
 const verifyShareToken = (token) => {
@@ -36,62 +34,6 @@ const logAudit = async (documentId, userId, action, ipAddress) => {
   } catch (error) {
     console.error('Audit log failure:', error);
   }
-};
-
-const createTransporter = () => nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'sandbox.smtp.mailtrap.io',
-  port: Number(process.env.SMTP_PORT || 2525),
-  secure: false,
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 15000,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  tls: { rejectUnauthorized: false },
-});
-
-const sendMailWithTimeout = async (transporter, mailOptions, timeoutMs = 20000) => {
-  return Promise.race([
-    transporter.sendMail(mailOptions),
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Email delivery timed out. Please try again.')), timeoutMs);
-    })
-  ]);
-};
-
-const applySignatureToPdf = async ({ documentUrl, signatureData, coordinates }) => {
-  const pdfResponse = await fetch(documentUrl);
-  if (!pdfResponse.ok) {
-    throw new Error('Unable to download the PDF for signing.');
-  }
-
-  const pdfBytes = Buffer.from(await pdfResponse.arrayBuffer());
-  const pdfDoc = await PDFDocument.load(pdfBytes);
-  const page = pdfDoc.getPage(0);
-  const imageBytes = Buffer.from(signatureData.split(',')[1], 'base64');
-  const signatureImage = await pdfDoc.embedPng(imageBytes);
-
-  const previewWidth = Number(coordinates?.preview_width || coordinates?.canvas_width || 0);
-  const previewHeight = Number(coordinates?.preview_height || coordinates?.canvas_height || 0);
-  const overlayWidth = Number(coordinates?.overlay_width || coordinates?.canvas_width || 150);
-  const overlayHeight = Number(coordinates?.overlay_height || coordinates?.canvas_height || 60);
-  const x = Number(coordinates?.x_position || 0);
-  const y = Number(coordinates?.y_position || 0);
-
-  const pageWidth = page.getWidth();
-  const pageHeight = page.getHeight();
-  const scaleX = previewWidth > 0 ? pageWidth / previewWidth : 1;
-  const scaleY = previewHeight > 0 ? pageHeight / previewHeight : 1;
-
-  const width = Math.min(overlayWidth * scaleX, pageWidth * 0.45);
-  const height = Math.min(overlayHeight * scaleY, pageHeight * 0.18);
-  const drawX = Math.max(0, x * scaleX);
-  const drawY = Math.max(0, pageHeight - (y + overlayHeight) * scaleY);
-
-  page.drawImage(signatureImage, { x: drawX, y: drawY, width, height });
-  return await pdfDoc.save();
 };
 
 router.post('/upload', authenticateToken, (req, res) => {
@@ -233,62 +175,6 @@ router.get('/public/:token', async (req, res) => {
   }
 });
 
-router.post('/public/:token/sign', async (req, res) => {
-  try {
-    const verified = verifyShareToken(req.params.token);
-    if (!verified) return res.status(401).json({ error: 'This signature link has expired or is invalid.' });
-
-    const { signatureData, coordinates, signerEmail = 'signer@unknown.local' } = req.body;
-    if (!signatureData) return res.status(400).json({ error: 'A signature image is required.' });
-
-    const document = await prisma.document.findUnique({ where: { id: verified.documentId } });
-    if (!document) return res.status(404).json({ error: 'Requested document asset not found.' });
-
-    const signedPdfBytes = await applySignatureToPdf({
-      documentUrl: document.fileUrl,
-      signatureData,
-      coordinates
-    });
-
-    const signedFileName = `public-${document.id}-${Date.now()}-signed.pdf`;
-    const { error: uploadError } = await supabaseClient.storage
-      .from('documents')
-      .upload(signedFileName, signedPdfBytes, { contentType: 'application/pdf', upsert: false });
-
-    if (uploadError) throw new Error(`Unable to store the signed PDF: ${uploadError.message}`);
-
-    const { data: publicUrlData } = supabaseClient.storage.from('documents').getPublicUrl(signedFileName);
-
-    await prisma.$transaction(async (tx) => {
-      await tx.document.update({
-        where: { id: document.id },
-        data: { fileUrl: publicUrlData.publicUrl, status: 'SIGNED', rejectReason: null }
-      });
-
-      await tx.signature.create({
-        data: {
-          documentId: document.id,
-          signerEmail,
-          signerId: null,
-          signatureData,
-          isSigned: true,
-          signedAt: new Date(),
-          x: coordinates ? Number(coordinates.x_position || 0) : 0,
-          y: coordinates ? Number(coordinates.y_position || 0) : 0,
-          pageNumber: 1
-        }
-      });
-    });
-
-    await logAudit(document.id, document.ownerId, `External signer completed signature for ${signerEmail}`, req.ip || '127.0.0.1');
-
-    res.status(200).json({ success: true, message: 'Document signed successfully.', shareExpiresAt: verified.expiresAt });
-  } catch (error) {
-    console.error('External signature failure:', error);
-    res.status(500).json({ error: 'Unable to complete the external signing request.' });
-  }
-});
-
 router.post('/public/:token/decision', async (req, res) => {
   try {
     const verified = verifyShareToken(req.params.token);
@@ -317,6 +203,8 @@ router.post('/public/:token/decision', async (req, res) => {
 });
 
 router.post('/:id/share', authenticateToken, async (req, res) => {
+
+  // console.log("inside the share url section");
   try {
     const document = await prisma.document.findFirst({ where: { id: req.params.id, ownerId: req.user.id } });
     if (!document) return res.status(404).json({ error: 'Requested document asset not found.' });
@@ -324,45 +212,41 @@ router.post('/:id/share', authenticateToken, async (req, res) => {
     const share = createShareToken(document.id);
     const signerEmail = req.body.email || req.user.email;
 
-    const transporter = createTransporter();
-    let emailSent = false;
-    let deliveryResponse = 'Email delivery not attempted.';
-
     try {
-      const info = await sendMailWithTimeout(transporter, {
-        from: process.env.SMTP_FROM || '"DocuSign.io" <noreply@docusign.io>',
+      const { default: nodemailer } = await import('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'sandbox.smtp.mailtrap.io',
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: false,
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        tls: { rejectUnauthorized: false }
+      });
+      const info = await transporter.sendMail({
+        from: '"DocuSign.io" <noreply@docusign.io>',
         to: signerEmail,
-        subject: 'Your secure signing invitation is ready',
-        html: `
-          <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;background:#0f172a;color:#e5eefb;padding:24px;border-radius:18px;">
-            <h2 style="margin:0 0 8px;font-size:24px;line-height:1.2;color:#fff;">Secure signature request</h2>
-            <p style="margin:0 0 14px;color:#cbd5e1;font-size:14px;">You have been invited to review and sign a document securely. This invitation expires in 7 days from the time it was sent.</p>
-            <div style="background:#111827;border:1px solid #1f2937;border-radius:16px;padding:18px;">
-              <p style="margin:0 0 8px;color:#bfdbfe;font-size:13px;text-transform:uppercase;letter-spacing:1.4px;">Open your secure link</p>
-              <a href="${share.shareUrl}" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#8b5cf6);color:#fff;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:700;font-size:14px;">Review & sign document</a>
-              <p style="margin-top:12px;color:#cbd5e1;font-size:12px;word-break:break-all;">${share.shareUrl}</p>
-            </div>
-            <p style="margin-top:14px;color:#94a3b8;font-size:12px;">If this request was not expected, you can safely ignore this email.</p>
-          </div>`
+        subject: 'Your secure signature link is ready',
+        html: `<p>Open this secure link to review and sign the document:</p><p><a href="${share.shareUrl}">${share.shareUrl}</a></p>`
       });
 
-      emailSent = true;
-      deliveryResponse = info.response || 'Queued through SMTP.';
-    } catch (smtpError) {
-      console.warn('SMTP delivery unavailable, using fallback share link:', smtpError.message || smtpError);
-      deliveryResponse = 'Email delivery unavailable. The secure link was still generated for manual sharing.';
+      console.log('✅ Share email dispatched to', signerEmail, info?.response || 'sent');
+      
+      return res.status(200).json({
+        success: true,
+        shareUrl: share.shareUrl,
+        expiresAt: share.expiresAt,
+        emailSent: true,
+        message: `Signature link sent to ${signerEmail}. Link expires in 7 days.`
+      });
+    } catch (emailError) {
+      console.error('❌ Email send failed:', emailError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Email service unavailable. Verify SMTP credentials in environment variables.',
+        emailSent: false
+      });
     }
-
-    res.status(200).json({
-      success: true,
-      shareUrl: share.shareUrl,
-      expiresAt: share.expiresAt,
-      emailSent,
-      deliveryResponse,
-      fallback: !emailSent
-    });
   } catch (error) {
-    console.error('Share link generation failed:', error);
+    console.error('❌ Document share error:', error);
     res.status(500).json({ error: 'Unable to generate the secure signing link.' });
   }
 });
@@ -377,12 +261,7 @@ router.get('/:id/audit', authenticateToken, async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    const signatures = await prisma.signature.findMany({
-      where: { documentId: document.id },
-      orderBy: { signedAt: 'desc' }
-    });
-
-    res.status(200).json({ success: true, document, auditEntries, signatures });
+    res.status(200).json({ success: true, document, auditEntries });
   } catch (error) {
     res.status(500).json({ error: 'Unable to load audit history.' });
   }
@@ -422,7 +301,43 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Requested document asset not found." });
     }
 
-    const signedPdfBytes = await applySignatureToPdf({ documentUrl: document.fileUrl, signatureData, coordinates });
+    const pdfResponse = await fetch(document.fileUrl);
+    if (!pdfResponse.ok) {
+      throw new Error('Unable to download the PDF for signing.');
+    }
+
+    const pdfBytes = Buffer.from(await pdfResponse.arrayBuffer());
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const page = pdfDoc.getPage(0);
+
+    const imageBytes = Buffer.from(signatureData.split(',')[1], 'base64');
+    const signatureImage = await pdfDoc.embedPng(imageBytes);
+
+    const previewWidth = Number(coordinates?.preview_width || coordinates?.canvas_width || 0);
+    const previewHeight = Number(coordinates?.preview_height || coordinates?.canvas_height || 0);
+    const overlayWidth = Number(coordinates?.overlay_width || coordinates?.canvas_width || 150);
+    const overlayHeight = Number(coordinates?.overlay_height || coordinates?.canvas_height || 60);
+    const x = Number(coordinates?.x_position || 0);
+    const y = Number(coordinates?.y_position || 0);
+
+    const pageWidth = page.getWidth();
+    const pageHeight = page.getHeight();
+    const scaleX = previewWidth > 0 ? pageWidth / previewWidth : 1;
+    const scaleY = previewHeight > 0 ? pageHeight / previewHeight : 1;
+
+    const width = Math.min(overlayWidth * scaleX, pageWidth * 0.45);
+    const height = Math.min(overlayHeight * scaleY, pageHeight * 0.18);
+    const drawX = Math.max(0, x * scaleX);
+    const drawY = Math.max(0, pageHeight - (y + overlayHeight) * scaleY);
+
+    page.drawImage(signatureImage, {
+      x: drawX,
+      y: drawY,
+      width,
+      height,
+    });
+
+    const signedPdfBytes = await pdfDoc.save();
     const signedFileName = `${req.user.id}-${Date.now()}-signed.pdf`;
     const { error: uploadError } = await supabaseClient.storage
       .from('documents')

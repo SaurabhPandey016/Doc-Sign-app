@@ -1,13 +1,12 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import prisma from './config/db.js'; // The .js extension is mandatory in ES Modules
-import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import { authenticateToken } from './middleware/auth.js';
 
 import documentRoutes from './routes/documentRoutes.js'; // Import our new routers
 
-dotenv.config();
 const app = express();
 app.use(cors({
   origin: true,
@@ -62,6 +61,10 @@ app.get('/api/auth/verify-session', authenticateToken, (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+
+// Log SMTP configuration used by Nodemailer (do not print secrets)
+console.log('SMTP host:', process.env.SMTP_HOST || 'not-set', 'SMTP port:', process.env.SMTP_PORT || 'not-set');
+
 app.listen(PORT, () => {
   console.log(`Server executing cleanly on port http://localhost:${PORT}`);
 });

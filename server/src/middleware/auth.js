@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 export const authenticateToken = (req, res, next) => {
+  console.log(`[Auth] Checking token for ${req.method} ${req.originalUrl}`);
   let token = null;
 
   // 1. Try to extract the token from incoming cookie jars
@@ -20,11 +21,13 @@ export const authenticateToken = (req, res, next) => {
   }
 
   if (!token) {
+    console.log(`[Auth] Denied: Token missing for ${req.method} ${req.originalUrl}`);
     return res.status(401).json({ error: "Access denied. Token missing from request cookies or authentication header." });
   }
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decodedUser) => {
     if (err) {
+      console.log(`[Auth] Denied: Token invalid for ${req.method} ${req.originalUrl}`);
       return res.status(403).json({ error: "Access forbidden. Token is invalid or expired." });
     }
     

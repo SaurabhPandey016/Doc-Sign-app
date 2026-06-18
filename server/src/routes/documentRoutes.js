@@ -11,20 +11,38 @@ const SHARE_SECRET = process.env.SHARE_SECRET || 'dev-signature-share-secret';
 
 const createShareToken = (documentId, recipientEmail = '') => {
   const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-  const payload = `${documentId}:${expiresAt}`;
+  // Include email in cryptographic payload for tamper-proof audit tracking
+  const payload = `${documentId}:${expiresAt}:${recipientEmail}`;
   const signature = crypto.createHmac('sha256', SHARE_SECRET).update(payload).digest('hex');
-  const token = `${signature}.${documentId}.${expiresAt}`;
-  const emailParam = recipientEmail ? `?email=${encodeURIComponent(recipientEmail)}` : '';
-  return { token, expiresAt, shareUrl: `${process.env.FRONTEND_URL}/sign/${token}${emailParam}` };
+  // Encode email in base64 to safely include in token
+  const emailEncoded = Buffer.from(recipientEmail).toString('base64');
+  const token = `${signature}.${documentId}.${expiresAt}.${emailEncoded}`;
+  return { token, expiresAt, shareUrl: `${process.env.FRONTEND_URL}/sign/${token}` };
 };
 
 const verifyShareToken = (token) => {
-  const [signature, documentId, expiresAt] = token.split('.');
+  const parts = token.split('.');
+  if (parts.length < 3) return null;
+  
+  const [signature, documentId, expiresAt, emailEncoded] = parts;
   if (!signature || !documentId || !expiresAt) return null;
-  const payload = `${documentId}:${expiresAt}`;
+  
+  // Decode email from base64
+  let recipientEmail = '';
+  if (emailEncoded) {
+    try {
+      recipientEmail = Buffer.from(emailEncoded, 'base64').toString('utf-8');
+    } catch (error) {
+      recipientEmail = '';
+    }
+  }
+  
+  // Verify signature includes the email for tamper-proof validation
+  const payload = `${documentId}:${expiresAt}:${recipientEmail}`;
   const expected = crypto.createHmac('sha256', SHARE_SECRET).update(payload).digest('hex');
   if (expected !== signature || Number(expiresAt) < Date.now()) return null;
-  return { documentId, expiresAt: Number(expiresAt) };
+  
+  return { documentId, expiresAt: Number(expiresAt), recipientEmail };
 };
 
 const logAudit = async (documentId, userId, action, ipAddress) => {
@@ -288,11 +306,14 @@ router.post('/public/:token/sign', async (req, res) => {
       data: { fileUrl: publicUrlData.publicUrl, status: 'SIGNED' }
     });
 
+    // Use email from cryptographic token for accurate audit tracking
+    const auditSignerEmail = verified.recipientEmail || signerEmail || 'external-signer@example.com';
+    
     // Create signature record
     await prisma.signature.create({
       data: {
         documentId: verified.documentId,
-        signerEmail: signerEmail || 'external-signer@example.com',
+        signerEmail: auditSignerEmail,
         signatureData: signatureData,
         isSigned: true,
         signedAt: new Date(),
@@ -302,11 +323,11 @@ router.post('/public/:token/sign', async (req, res) => {
       }
     });
 
-    // Log audit trail
+    // Log audit trail with email from cryptographic token (tamper-proof)
     await logAudit(
       verified.documentId,
       document.ownerId,
-      `Document signed externally by ${signerEmail || 'external signer'} via secure link`,
+      `Document signed externally by ${auditSignerEmail} (IP: ${req.ip || '127.0.0.1'})`,
       req.ip || '127.0.0.1'
     );
 

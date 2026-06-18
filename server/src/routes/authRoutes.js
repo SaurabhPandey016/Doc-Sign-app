@@ -20,7 +20,7 @@ console.log('  User:', process.env.SMTP_USER ? process.env.SMTP_USER.substring(0
 console.log('  Pass:', process.env.SMTP_PASS ? '***SET***' : 'NOT SET');
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'sandbox.smtp.mailtrap.io',
+  host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
   port: parseInt(process.env.SMTP_PORT || '587'), // FIXED: Shift to port 587 (Standard Secure TLS port)
   secure: false, // Must remain false for explicit STARTTLS port upgrades over 587
   auth: {
@@ -78,7 +78,7 @@ router.post('/forgot-password', async (req, res) => {
     console.log('Attempting to send email to:', user.email);
     console.log('SMTP Config - Host:', process.env.SMTP_HOST, 'Port:', process.env.SMTP_PORT);
     const info = await transporter.sendMail({
-      from: '"Signature Vault Support" <noreply@company.com>',
+      from: '"Signature Vault Support" <developersaurabh04@gmail.com>',
       to: user.email,
       subject: "Immutable Reset Vector - Password Change Request",
       html: `

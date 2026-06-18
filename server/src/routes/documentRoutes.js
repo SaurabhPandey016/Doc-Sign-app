@@ -9,12 +9,13 @@ import { PDFDocument } from 'pdf-lib';
 const router = express.Router();
 const SHARE_SECRET = process.env.SHARE_SECRET || 'dev-signature-share-secret';
 
-const createShareToken = (documentId) => {
+const createShareToken = (documentId, recipientEmail = '') => {
   const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
   const payload = `${documentId}:${expiresAt}`;
   const signature = crypto.createHmac('sha256', SHARE_SECRET).update(payload).digest('hex');
   const token = `${signature}.${documentId}.${expiresAt}`;
-  return { token, expiresAt, shareUrl: `${process.env.FRONTEND_URL}/sign/${token}` };
+  const emailParam = recipientEmail ? `?email=${encodeURIComponent(recipientEmail)}` : '';
+  return { token, expiresAt, shareUrl: `${process.env.FRONTEND_URL}/sign/${token}${emailParam}` };
 };
 
 const verifyShareToken = (token) => {
@@ -202,6 +203,124 @@ router.post('/public/:token/decision', async (req, res) => {
   }
 });
 
+// Public endpoint for external signers to sign documents
+router.post('/public/:token/sign', async (req, res) => {
+  const { token } = req.params;
+  const { signatureData, coordinates, signerEmail } = req.body;
+
+  try {
+    // Verify the share token (public access)
+    const verified = verifyShareToken(token);
+    if (!verified) {
+      return res.status(401).json({ error: 'This signature link has expired or is invalid.' });
+    }
+
+    // Fetch the document
+    const document = await prisma.document.findUnique({
+      where: { id: verified.documentId }
+    });
+    if (!document) {
+      return res.status(404).json({ error: 'Requested document asset not found.' });
+    }
+
+    // Download the PDF
+    const pdfResponse = await fetch(document.fileUrl);
+    if (!pdfResponse.ok) {
+      throw new Error('Unable to download the PDF for signing.');
+    }
+
+    const pdfBytes = Buffer.from(await pdfResponse.arrayBuffer());
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const page = pdfDoc.getPage(0);
+
+    // Embed the signature image
+    const imageBytes = Buffer.from(signatureData.split(',')[1], 'base64');
+    const signatureImage = await pdfDoc.embedPng(imageBytes);
+
+    // Calculate scaling and positioning
+    const previewWidth = Number(coordinates?.preview_width || coordinates?.canvas_width || 0);
+    const previewHeight = Number(coordinates?.preview_height || coordinates?.canvas_height || 0);
+    const overlayWidth = Number(coordinates?.overlay_width || coordinates?.canvas_width || 150);
+    const overlayHeight = Number(coordinates?.overlay_height || coordinates?.canvas_height || 60);
+    const x = Number(coordinates?.x_position || 0);
+    const y = Number(coordinates?.y_position || 0);
+
+    const pageWidth = page.getWidth();
+    const pageHeight = page.getHeight();
+    const scaleX = previewWidth > 0 ? pageWidth / previewWidth : 1;
+    const scaleY = previewHeight > 0 ? pageHeight / previewHeight : 1;
+
+    const width = Math.min(overlayWidth * scaleX, pageWidth * 0.45);
+    const height = Math.min(overlayHeight * scaleY, pageHeight * 0.18);
+    const drawX = Math.max(0, x * scaleX);
+    const drawY = Math.max(0, pageHeight - (y + overlayHeight) * scaleY);
+
+    // Draw signature on PDF
+    page.drawImage(signatureImage, {
+      x: drawX,
+      y: drawY,
+      width,
+      height,
+    });
+
+    const signedPdfBytes = await pdfDoc.save();
+    const signedFileName = `${verified.documentId}-${Date.now()}-signed.pdf`;
+    
+    // Upload signed PDF
+    const { error: uploadError } = await supabaseClient.storage
+      .from('documents')
+      .upload(signedFileName, signedPdfBytes, {
+        contentType: 'application/pdf',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(`Unable to store the signed PDF: ${uploadError.message}`);
+    }
+
+    const { data: publicUrlData } = supabaseClient.storage
+      .from('documents')
+      .getPublicUrl(signedFileName);
+
+    // Update document status
+    await prisma.document.update({
+      where: { id: verified.documentId },
+      data: { fileUrl: publicUrlData.publicUrl, status: 'SIGNED' }
+    });
+
+    // Create signature record
+    await prisma.signature.create({
+      data: {
+        documentId: verified.documentId,
+        signerEmail: signerEmail || 'external-signer@example.com',
+        signatureData: signatureData,
+        isSigned: true,
+        signedAt: new Date(),
+        x: coordinates ? parseFloat(coordinates.x_position) : 0.0,
+        y: coordinates ? parseFloat(coordinates.y_position) : 0.0,
+        pageNumber: 1
+      }
+    });
+
+    // Log audit trail
+    await logAudit(
+      verified.documentId,
+      document.ownerId,
+      `Document signed externally by ${signerEmail || 'external signer'} via secure link`,
+      req.ip || '127.0.0.1'
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Document signed successfully.',
+      status: 'SIGNED'
+    });
+  } catch (error) {
+    console.error('❌ Public sign error:', error);
+    res.status(500).json({ error: error.message || 'Unable to sign the document.' });
+  }
+});
+
 router.post('/:id/share', authenticateToken, async (req, res) => {
 
   // console.log("inside the share url section");
@@ -209,27 +328,41 @@ router.post('/:id/share', authenticateToken, async (req, res) => {
     const document = await prisma.document.findFirst({ where: { id: req.params.id, ownerId: req.user.id } });
     if (!document) return res.status(404).json({ error: 'Requested document asset not found.' });
 
-    const share = createShareToken(document.id);
     const signerEmail = req.body.email || req.user.email;
+    const share = createShareToken(document.id, signerEmail);
 
     try {
       const { default: nodemailer } = await import('nodemailer');
       const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'sandbox.smtp.mailtrap.io',
+        host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
         port: Number(process.env.SMTP_PORT || 587),
         secure: false,
         auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
         tls: { rejectUnauthorized: false }
       });
-      const info = await transporter.sendMail({
-        from: '"DocuSign.io" <noreply@docusign.io>',
+
+      const mailOptions  = {
+        from: '"Signature app" <developersaurabh04@gmail.com>',
         to: signerEmail,
         subject: 'Your secure signature link is ready',
         html: `<p>Open this secure link to review and sign the document:</p><p><a href="${share.shareUrl}">${share.shareUrl}</a></p>`
-      });
+      }
+      const info = await transporter.sendMail(mailOptions, (error, info) => {
+        console.log("inside the transporter.sendMail callback");
+        if (error) {
+          console.error('❌ Email send failed:', error.message);
+          return res.status(500).json({
+            success: false,
+            error: error.message,
+            emailSent: false
+          });
+        }
+        else {
+          console.log('✅ Share email dispatched to', signerEmail, info?.response || 'sent');
+        }
+      })
 
-      console.log('✅ Share email dispatched to', signerEmail, info?.response || 'sent');
-      
+      // console.log('✅ Share email dispatched to', signerEmail, info?.response || 'sent');  
       return res.status(200).json({
         success: true,
         shareUrl: share.shareUrl,
@@ -247,7 +380,7 @@ router.post('/:id/share', authenticateToken, async (req, res) => {
     }
   } catch (error) {
     console.error('❌ Document share error:', error);
-    res.status(500).json({ error: 'Unable to generate the secure signing link.' });
+    res.status(500).json({ error: error.message });
   }
 });
 

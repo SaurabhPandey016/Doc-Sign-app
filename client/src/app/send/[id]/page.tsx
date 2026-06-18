@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Mail, ShieldCheck } from 'lucide-react';
-import { fetchWithTimeout } from '@/config/api';
+import { apiUrl } from '@/config/api';
 
 export default function SendDocumentPage() {
   const { id } = useParams();
@@ -18,6 +18,7 @@ export default function SendDocumentPage() {
   const [err, setErr] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Fetch document on mount
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -27,15 +28,29 @@ export default function SendDocumentPage() {
 
     const fetchDocument = async () => {
       try {
-        const response = await fetchWithTimeout(`/api/documents/${id}`, {
-          credentials: 'include'
-        }, 20000);
+        // Build complete URL with apiUrl helper
+        const endpoint = apiUrl(`/api/documents/${id}`);
+        console.log('[SEND] Fetching document from:', endpoint);
+
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include' // Send auth cookie
+        });
+
+        // Handle non-200 responses
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Server returned ${response.status}`);
+        }
+
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Unable to load this document.');
-        setDocumentTitle(data.document.title);
+        setDocumentTitle(data.document?.title || 'Untitled');
         setEmail(user.email);
       } catch (error) {
-        setErr(error instanceof Error ? error.message : 'Unable to load this document.');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load document';
+        console.error('[SEND] Document fetch error:', errorMessage);
+        setErr(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -44,30 +59,51 @@ export default function SendDocumentPage() {
     fetchDocument();
   }, [authLoading, id, router, user]);
 
+  // Send invitation with email
   const handleSend = async () => {
+    if (!email.trim()) {
+      setErr('Please enter a valid email address');
+      return;
+    }
+
     setErr('');
     setSuccess('');
     setSending(true);
 
     try {
-      const response = await fetchWithTimeout(`/api/documents/${id}/share`, {
+      // Build complete URL with apiUrl helper
+      const endpoint = apiUrl(`/api/documents/${id}/share`);
+      console.log('[SEND] Sending invitation to:', endpoint);
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email: email.trim() || user?.email })
-      }, 30000);
+        credentials: 'include', // Send auth cookie
+        body: JSON.stringify({ email: email.trim() })
+      });
 
+      // Parse response regardless of status
       const data = await response.json();
-      console.log('Share response data:', data);
-      if (!response.ok) throw new Error(data.error || 'Unable to send the signing link.');
+      console.log(data);
+      console.log('[SEND] Response received:', { status: response.status, emailSent: data.emailSent });
 
-      if (data.emailSent) {
-        setSuccess(`Secure signing invitation sent to ${email.trim() || user?.email}. Link expires in 7 days. If Mailtrap.io is slow you can also use this link to test the app: ${data.shareUrl}`);
-      } else {
-        throw new Error('Email service failed. Please verify SMTP configuration on your backend.');
+      // Check response status and emailSent flag
+      if (!response.ok || !data.emailSent) {
+        throw new Error(
+          data.error || 
+          'Email service unavailable. Please try again later.'
+        );
       }
+
+      // Success: email was sent
+      setSuccess(
+        `Invitation sent to ${email.trim()}. Check inbox for secure signing link (expires in 24 hours).`
+      );
+      setEmail(''); // Clear form
     } catch (error) {
-      setErr(error instanceof Error ? error.message : 'Unable to send the signing link.');
+      const errorMessage = error instanceof Error ? error.message : 'Unable to send invitation';
+      console.error('[SEND] Error:', errorMessage);
+      setErr(errorMessage);
     } finally {
       setSending(false);
     }
@@ -83,7 +119,7 @@ export default function SendDocumentPage() {
         <div className="border-b border-zinc-100 p-6 dark:border-zinc-800">
           <Link href="/dashboard" className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-black dark:hover:text-white"><ArrowLeft className="h-3.5 w-3.5" />Back to dashboard</Link>
           <h1 className="mt-4 text-2xl font-black text-black dark:text-white">Send a signature request</h1>
-          <p className="mt-1 text-xs text-zinc-500">Create a professional, tokenized invitation that expires after 7 days.</p>
+          <p className="mt-1 text-xs text-zinc-500">Create a professional, tokenized invitation that expires after 24 hours.</p>
         </div>
 
         <div className="grid gap-8 p-6 lg:grid-cols-[1fr_0.9fr]">
@@ -94,10 +130,11 @@ export default function SendDocumentPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-2 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 shadow-sm outline-none ring-0 transition focus:border-black dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-white"
+              disabled={sending}
+              className="mt-2 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 shadow-sm outline-none ring-0 transition focus:border-black dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-white disabled:opacity-50"
               placeholder="name@company.com"
             />
-            <p className="mt-2 text-[11px] text-zinc-500">The secure link will be emailed to this address with a 7-day expiry window.</p>
+            <p className="mt-2 text-[11px] text-zinc-500">The secure link will be emailed to this address with a 24-hour expiry window.</p>
             <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
               <p className="font-semibold">Document</p>
               <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-300">{documentTitle}</p>
@@ -108,7 +145,7 @@ export default function SendDocumentPage() {
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400"><ShieldCheck className="h-4 w-4" />What happens next</div>
             <ul className="mt-4 space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
               <li>• The signer receives a secure email with a tokenized link.</li>
-              <li>• The link is valid for 7 days from the sending moment.</li>
+              <li>• The link is valid for 24 hours from the sending moment.</li>
               <li>• The signer can accept, reject, or sign the PDF without logging in.</li>
             </ul>
             {err && <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"><AlertCircle className="h-4 w-4" />{err}</div>}

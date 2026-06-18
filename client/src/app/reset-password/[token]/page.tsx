@@ -21,8 +21,16 @@ export default function ResetPasswordPage({ params }: ResetProps) {
 
   const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate passwords match
     if (password !== confirmPassword) {
-      setErr('Credential values do not match standard equivalence metrics.');
+      setErr('Passwords do not match. Please try again.');
+      return;
+    }
+
+    // Validate password length
+    if (password.length < 6) {
+      setErr('Password must be at least 6 characters long.');
       return;
     }
 
@@ -30,22 +38,37 @@ export default function ResetPasswordPage({ params }: ResetProps) {
     setErr('');
 
     try {
-      const response = await fetch(apiUrl(`/api/auth/reset-password/${token}`), {
+      // Build complete URL with token
+      const endpoint = apiUrl(`/api/auth/reset-password/${token}`);
+      console.log('[RESET] Sending request to:', endpoint);
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        credentials: 'include', // Send auth cookie if exists
         body: JSON.stringify({ password })
       });
 
-      if (response.ok) {
-        setSuccess(true);
-        setTimeout(() => router.push('/login'), 2500);
-      } else {
-        const data = await response.json();
-        setErr(data.error || 'Server node validation parameters rejected new credential updates.');
+      // Parse response data
+      const data = await response.json();
+      console.log('[RESET] Response:', { status: response.status, success: data.success });
+
+      // Check response status
+      if (!response.ok) {
+        throw new Error(data.error || `Server error: ${response.status}`);
       }
-    } catch {
-      setErr('Communication disruption error mapping transaction pipelines.');
+
+      // Success: password was reset
+      setSuccess(true);
+      setPassword('');
+      setConfirmPassword('');
+      
+      // Redirect to login after 2.5 seconds
+      setTimeout(() => router.push('/login'), 2500);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to reset password';
+      console.error('[RESET] Error:', errorMessage);
+      setErr(errorMessage);
     } finally {
       setSubmitting(false);
     }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { apiUrl } from '@/config/api';
 import { Rnd } from 'react-rnd';
 import SignatureCanvas from 'react-signature-canvas';
@@ -9,6 +9,7 @@ import { AlertCircle, CheckCircle2, Loader2, Move } from 'lucide-react';
 
 export default function PublicSignPage() {
   const { token } = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const [document, setDocument] = useState<any>(null);
   const sigPadRef = useRef<SignatureCanvas | null>(null);
@@ -24,6 +25,7 @@ export default function PublicSignPage() {
   const [sigPosition, setSigPosition] = useState({ x: 56, y: 56 });
   const [sigSize, setSigSize] = useState({ width: 180, height: 70 });
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
+  const [signerEmail, setSignerEmail] = useState<string>('');
 
   const getPreviewBounds = () => {
     const rect = previewRef.current?.getBoundingClientRect();
@@ -39,6 +41,13 @@ export default function PublicSignPage() {
     const maxY = Math.max(0, previewHeight - height);
     return { x: Math.min(Math.max(nextX, 0), maxX), y: Math.min(Math.max(nextY, 0), maxY) };
   };
+
+  useEffect(() => {
+    const emailFromUrl = searchParams.get('email');
+    if (emailFromUrl) {
+      setSignerEmail(decodeURIComponent(emailFromUrl));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const node = previewRef.current;
@@ -109,7 +118,7 @@ export default function PublicSignPage() {
               preview_width: previewWidth,
               preview_height: previewHeight,
             },
-            signerEmail: 'external-signer@example.com'
+            signerEmail: signerEmail || 'external-signer@example.com'
           }
         : { action, reason };
 

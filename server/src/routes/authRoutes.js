@@ -13,6 +13,12 @@ router.post('/login', handleLogin);
 router.post('/logout', handleLogout);
 
 // Configuration for Nodemailer email delivery transporter engine
+console.log('Initializing Nodemailer transporter with SMTP config:');
+console.log('  Host:', process.env.SMTP_HOST);
+console.log('  Port:', process.env.SMTP_PORT);
+console.log('  User:', process.env.SMTP_USER ? process.env.SMTP_USER.substring(0, 5) + '...' : 'NOT SET');
+console.log('  Pass:', process.env.SMTP_PASS ? '***SET***' : 'NOT SET');
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'sandbox.smtp.mailtrap.io',
   port: parseInt(process.env.SMTP_PORT || '587'), // FIXED: Shift to port 587 (Standard Secure TLS port)
@@ -24,6 +30,15 @@ const transporter = nodemailer.createTransport({
   tls: {
     // Avoids certificate verification drops on guarded developer machines
     rejectUnauthorized: false 
+  }
+});
+
+// Test transporter connection
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ SMTP Transporter verification failed:', error.message);
+  } else {
+    console.log('✅ SMTP Transporter verified successfully!');
   }
 });
 
@@ -56,8 +71,12 @@ router.post('/forgot-password', async (req, res) => {
     });
 
     const verificationLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    console.log('Reset token generated:', resetToken);
+    console.log('Verification link:', verificationLink);
 
     // Dispatch system transmission packet using Nodemailer
+    console.log('Attempting to send email to:', user.email);
+    console.log('SMTP Config - Host:', process.env.SMTP_HOST, 'Port:', process.env.SMTP_PORT);
     const info = await transporter.sendMail({
       from: '"Signature Vault Support" <noreply@company.com>',
       to: user.email,
@@ -73,12 +92,14 @@ router.post('/forgot-password', async (req, res) => {
         </div>
       `
     });
-    console.log('Password reset email dispatched:', info && info.response ? info.response : 'sent');
+    console.log('✅ Password reset email sent successfully!');
+    console.log('Email response:', info.response);
 
     res.status(200).json({ message: "If an account matches that email, a reset transmission link has been dispatched." });
   } catch (error) {
      //Prints the raw network error trace directly into your server shell log for visibility
-    console.error("CRITICAL MAIL DELIVERY EXCEPTION:", error);
+    console.error("❌ CRITICAL MAIL DELIVERY EXCEPTION:", error.message);
+    console.error("Full error details:", error);
     res.status(500).json({ 
       error: error.message,
       details: error.message 

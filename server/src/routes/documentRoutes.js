@@ -389,7 +389,7 @@ router.post('/:id/share', authenticateToken, async (req, res) => {
         shareUrl: share.shareUrl,
         expiresAt: share.expiresAt,
         emailSent: true,
-        message: `Signature link sent to ${signerEmail}. Link expires in 7 days.`
+        message: `Signature link sent to ${signerEmail}. Link expires in 24 hours.`
       });
     } catch (emailError) {
       console.error('❌ Email send failed:', emailError.message);

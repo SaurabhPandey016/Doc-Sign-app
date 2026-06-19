@@ -65,7 +65,7 @@ export default function AuditPage() {
                 <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500"><ShieldCheck className="h-3.5 w-3.5" />{entry.action}</div>
                 <span className="text-[11px] text-zinc-400">{new Date(entry.createdAt).toLocaleString()}</span>
               </div>
-              <p className="mt-2 text-[11px] text-zinc-500">IP: {entry.ipAddress || 'Unknown'}</p>
+              {/* <p className="mt-2 text-[11px] text-zinc-500">IP: {entry.ipAddress || 'Unknown'}</p> */}
             </article>
           ))}
           </section>

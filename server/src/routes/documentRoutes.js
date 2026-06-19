@@ -369,7 +369,7 @@ router.post('/:id/share', authenticateToken, async (req, res) => {
         html: `<p>Open this secure link to review and sign the document:</p><p><a href="${share.shareUrl}">${share.shareUrl}</a></p>`
       }
       const info = await transporter.sendMail(mailOptions, (error, info) => {
-        console.log("inside the transporter.sendMail callback");
+        // console.log("inside the transporter.sendMail callback");
         if (error) {
           console.error('❌ Email send failed:', error.message);
           return res.status(500).json({

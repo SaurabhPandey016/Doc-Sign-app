@@ -8,7 +8,7 @@
 
 **A modern, full-stack digital document signing and management platform with real-time signature verification, comprehensive audit trails, and seamless collaboration features.**
 
-[🌐 Live Demo](#deployment) • [📚 Documentation](#documentation) • [🛠️ Tech Stack](#tech-stack) • [🚀 Getting Started](#quick-start)
+[🌐 Live Demo](https://doc-sign-app-gamma.vercel.app) • [📚 Documentation](#documentation) • [🛠️ Tech Stack](#tech-stack) • [🚀 Getting Started](#quick-start)
 
 ---
 
@@ -422,9 +422,9 @@ For questions, issues, or suggestions:
 
 ### ⭐ If you find this project helpful, please star it!
 
-Made with ❤️ by the DocSign Team
+Made with ❤️ by Saurabh Pandey
 
-**Production URL**: https://doc-sign-app.vercel.app  
-**API URL**: https://doc-sign-api.onrender.com
+**Production URL**: https://doc-sign-app-gamma.vercel.app  
+**API URL**: https://doc-sign-app-api.onrender.com
 
 </div>

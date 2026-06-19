@@ -10,7 +10,7 @@
 
 **A modern, responsive, and interactive document signing interface built with cutting-edge React technologies.**
 
-[🌐 Live Demo](https://doc-sign-app.vercel.app) • [📖 Features](#-key-features) • [⚙️ Setup](#-installation) • [🏗️ Architecture](#-architecture)
+[🌐 Live Demo](https://doc-sign-app-gamma.vercel.app) • [📖 Features](#-key-features) • [⚙️ Setup](#-installation) • [🏗️ Architecture](#-architecture)
 
 ---
 
@@ -227,8 +227,6 @@ cp .env.example .env.local
 # API Configuration
 NEXT_PUBLIC_API_URL=http://localhost:3001
 
-# For Production (Vercel)
-# NEXT_PUBLIC_API_URL=https://api.docsign.app
 ```
 
 ### Step 4: Run Development Server
@@ -494,7 +492,7 @@ const doc: Document = {
 ```typescript
 const API_URL = process.env.NEXT_PUBLIC_API_URL
 // Development: http://localhost:3001
-// Production: https://api.docsign.app
+// Production: https://your-url
 ```
 
 ### Authenticated Requests
@@ -578,7 +576,7 @@ For issues or questions:
 
 ### 🌟 Built with Modern Web Technologies
 
-**Frontend Live**: https://doc-sign-app.vercel.app
+**Frontend Live**: https://doc-sign-app-gamma.vercel.app
 
 Made with ❤️ for seamless document signing
 
